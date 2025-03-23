@@ -1,0 +1,49 @@
+{
+  "name": "ticket-bot",
+  "version": "0.0.1",
+  "description": "A Microsoft Teams bot designed to facilitate ticket creation in an external API. The bot collects information from conversations between customers and certified technicians within a shared Team, streamlining the process of generating and managing support tickets.",
+  "author": "Microsoft",
+  "license": "MIT",
+  "engines": {
+    "node": "18 || 20"
+  },
+  "main": "./lib/index.js",
+  "scripts": {
+    "dev:teamsfx": "env-cmd --silent -f .localConfigs npm run dev",
+    "dev": "nodemon --watch ./src --exec node --inspect=9239 --signal SIGINT -r ts-node/register ./src/index.ts",
+    "build": "tsc --build",
+    "start": "node ./lib/src/index.js",
+    "watch": "nodemon --watch ./src --exec \"npm run start\"",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com"
+  },
+  "dependencies": {
+    "@azure/identity": "^4.6.0",
+    "@microsoft/microsoft-graph-client": "^3.0.1",
+    "@microsoft/teamsfx": "^3.0.0-alpha",
+    "adaptive-expressions": "^4.23.1",
+    "adaptivecards-templating": "^2.3.1",
+    "botbuilder": "^4.23.1",
+    "botbuilder-dialogs": "^4.23.1",
+    "dotenv": "^16.4.7",
+    "express": "^5.0.1",
+    "isomorphic-fetch": "^3.0.0",
+    "mssql": "^11.0.1",
+    "ticket-bot": "file:"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/json-schema": "^7.0.15",
+    "@types/mssql": "^9.1.6",
+    "@types/node": "^18.0.0",
+    "copyfiles": "^2.4.1",
+    "env-cmd": "^10.1.0",
+    "nodemon": "^3.1.7",
+    "shx": "^0.3.4",
+    "ts-node": "^10.4.0",
+    "typescript": "^5.3.0"
+  }
+}

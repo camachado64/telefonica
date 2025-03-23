@@ -1,0 +1,273 @@
+{
+    "type": "AdaptiveCard",
+    "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+    "version": "1.5",
+    "body": [
+        {
+            "type": "TextBlock",
+            "size": "ExtraLarge",
+            "weight": "Bolder",
+            "text": "Crear nueva incidencia",
+            "style": "heading"
+        },
+        {
+            "type": "TextBlock",
+            "spacing": "None",
+            "text": "Iniciado en ${createdUtc}",
+            "isSubtle": true,
+            "wrap": true
+        },
+        {
+            "type": "ColumnSet",
+            "columns": [
+                {
+                    "type": "Column",
+                    "width": "auto",
+                    "items": [
+                        {
+                            "type": "Image",
+                            "style": "Person",
+                            "url": "https://pbs.twimg.com/profile_images/3647943215/d7f12830b3c17a5a9e4afcc370e3a37e_400x400.jpeg",
+                            "altText": "${from.name}",
+                            "size": "Small"
+                        }
+                    ]
+                },
+                {
+                    "type": "Column",
+                    "width": "stretch",
+                    "items": [
+                        {
+                            "type": "TextBlock",
+                            "weight": "Bolder",
+                            "text": "${from.name}",
+                            "wrap": true
+                        },
+                        {
+                            "type": "TextBlock",
+                            "spacing": "None",
+                            "text": "${from.name}",
+                            "isSubtle": true,
+                            "wrap": true
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "type": "Container",
+            "style": "emphasis",
+            "bleed": true,
+            "items": [
+                {
+                    "type": "Container",
+                    "items": [
+                        {
+                            "type": "TextBlock",
+                            "size": "Medium",
+                            "weight": "Bolder",
+                            "text": "Detalles del Equipo",
+                            "id": "teamNameLabel",
+                            "spacing": "None"
+                        },
+                        {
+                            "type": "ColumnSet",
+                            "columns": [
+                                {
+                                    "type": "Column",
+                                    "width": "auto",
+                                    "verticalContentAlignment": "Center",
+                                    "items": [
+                                        {
+                                            "type": "Image",
+                                            "style": "Person",
+                                            "url": "https://pbs.twimg.com/profile_images/3647943215/d7f12830b3c17a5a9e4afcc370e3a37e_400x400.jpeg",
+                                            "altText": "${from.name}",
+                                            "size": "Small"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "type": "Column",
+                                    "width": "stretch",
+                                    "verticalContentAlignment": "Center",
+                                    "items": [
+                                        {
+                                            "type": "TextBlock",
+                                            "id": "teamName",
+                                            "text": "${team.name}"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "Container",
+                    "items": [
+                        {
+                            "type": "TextBlock",
+                            "size": "Medium",
+                            "weight": "Bolder",
+                            "text": "Canal",
+                            "id": "channelLabel"
+                        },
+                        {
+                            "type": "ColumnSet",
+                            "columns": [
+                                {
+                                    "type": "Column",
+                                    "width": "stretch",
+                                    "items": [
+                                        {
+                                            "type": "TextBlock",
+                                            "id": "channelName",
+                                            "text": "${channel.name}"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "Container",
+                    "items": [
+                        {
+                            "type": "TextBlock",
+                            "size": "Medium",
+                            "weight": "Bolder",
+                            "text": "Hilo de Conversacion",
+                            "id": "threadLabel"
+                        },
+                        {
+                            "type": "ColumnSet",
+                            "columns": [
+                                {
+                                    "type": "Column",
+                                    "width": "stretch",
+                                    "items": [
+                                        {
+                                            "type": "TextBlock",
+                                            "id": "threadName",
+                                            "text": "${conversation.message}"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "type": "Container",
+            "bleed": true,
+            "isVisible": true,
+            "items": [
+                {
+                    "type": "TextBlock",
+                    "size": "Medium",
+                    "weight": "Bolder",
+                    "text": "Estado de la incidencia",
+                    "id": "ticketStateLabel"
+                },
+                {
+                    "type": "Input.ChoiceSet",
+                    "id": "ticketStateChoiceSet",
+                    "placeholder": "Estado de la incidencia",
+                    "isRequired": true,
+                    "value": "${ticket.state.id}",
+                    "choices": "${ticket.state.choices}"
+                },
+                {
+                    "type": "TextBlock",
+                    "size": "Medium",
+                    "weight": "Bolder",
+                    "text": "Cola de la incidencia",
+                    "id": "ticketCategoryLabel"
+                },
+                {
+                    "type": "Input.ChoiceSet",
+                    "id": "ticketCategoryChoiceSet",
+                    "placeholder": "Cola de la incidencia",
+                    "style": "compact",
+                    "isRequired": true,
+                    "isMultiSelect": false,
+                    "value": "${ticket.queue.id}",
+                    "choices": "${ticket.queue.choices}"
+                },
+                {
+                    "type": "TextBlock",
+                    "size": "Medium",
+                    "weight": "Bolder",
+                    "text": "Descricion de la incidencia",
+                    "id": "ticketDescriptionLabel"
+                },
+                {
+                    "type": "Input.Text",
+                    "placeholder": "Descricion de la incidencia",
+                    "id": "ticketDescriptionInput",
+                    "value": "${ticket.description}",
+                    "isRequired": true,
+                    "isMultiline": true,
+                    "maxLength": 256
+                }
+            ]
+        },
+        {
+            "type": "Container",
+            "isVisible": "${gui.buttons.visible}",
+            "items": [
+                {
+                    "type": "ActionSet",
+                    "actions": [
+                        {
+                            "type": "Action.Execute",
+                            "title": "${gui.buttons.create.label}",
+                            "id": "createTicketAction",
+                            "tooltip": "Crea una nueva incidencia",
+                            "style": "positive",
+                            "associatedInputs": "auto",
+                            "verb": "createTicket",
+                            "isEnabled": "${gui.buttons.create.enabled}",
+                            "data": {
+                                "command": "${command}",
+                                "team": "${team}",
+                                "channel": "${channel}",
+                                "conversation": "${conversation}",
+                                "from": "${from}",
+                                "ticket": "${ticket}",
+                                "token": "${token}",
+                                "createdUtc": "${createdUtc}",
+                                "gui": "${gui}"
+                            }
+                        },
+                        {
+                            "type": "Action.Execute",
+                            "title": "${gui.buttons.cancel.label}",
+                            "verb": "cancelTicket",
+                            "isEnabled": "${gui.buttons.cancel.enabled}",
+                            "id": "cancelTicketAction",
+                            "associatedInputs": "None",
+                            "tooltip": "${gui.buttons.cancel.tooltip}",
+                            "style": "destructive",
+                            "data": {
+                                "command": "${command}",
+                                "team": "${team}",
+                                "channel": "${channel}",
+                                "conversation": "${conversation}",
+                                "from": "${from}",
+                                "ticket": "${ticket}",
+                                "token": "${token}",
+                                "createdUtc": "${createdUtc}",
+                                "gui": "${gui}"
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}
