@@ -5,6 +5,7 @@ import {
   UserState,
 } from "botbuilder";
 import express, { Response, Request, Router } from "express";
+import https, { ServerOptions } from "https";
 
 import "isomorphic-fetch";
 // import path from "path";
@@ -108,12 +109,19 @@ apiRouter.use("/sharepoint", sharepointRouter);
 apiRouter.use("/technicians", techiniciansRouter);
 apiRouter.use("/logs", apiLogs);
 
-const server = app.listen(process.env.port || process.env.PORT || 3978, () => {
-  console.log(
-    `[expressApp][INFO] Bot started, ${app.name} listening to`,
-    server.address()
-  );
-});
+const options: ServerOptions = {
+  key: config.ssl.key,
+  cert: config.ssl.cert,
+};
+
+const server = https
+  .createServer(options, app)
+  .listen(process.env.port || process.env.PORT || 3978, () => {
+    console.log(
+      `[expressApp][INFO] Bot started, ${app.name} listening to`,
+      server.address()
+    );
+  });
 
 // Register an API endpoint with `express`. Teams sends messages to your application
 // through this endpoint.

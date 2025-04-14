@@ -241,7 +241,7 @@ export class TeamsBot extends TeamsActivityHandler {
     const technician = await this._techRepository.technicianByEmail(
       fromInfo.email
     );
-    if (!technician) {
+    if (!this.config.allowAll && !technician) {
       // If the caller is not a technician, log a warning and return as the caller is not authorized to use the bot
       console.warn(
         `[${TeamsBot.name}][WARN] ${this._handleMessage.name} Caller is not a technician`

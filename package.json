@@ -30,6 +30,7 @@
     "botbuilder-dialogs": "^4.23.1",
     "dotenv": "^16.4.7",
     "express": "^5.0.1",
+    "https": "^1.0.0",
     "isomorphic-fetch": "^3.0.0",
     "mssql": "^11.0.1",
     "ticket-bot": "file:"
