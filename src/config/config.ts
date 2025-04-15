@@ -15,10 +15,10 @@ dotEnv({
   override: true,
 });
 
-export interface SSLCert {
-  key: Buffer;
-  cert: Buffer;
-}
+// export interface SSLCert {
+//   key: Buffer;
+//   cert: Buffer;
+// }
 
 export interface BotConfiguration {
   botId: string;
@@ -52,7 +52,7 @@ export interface BotConfiguration {
 
   allowAll: string;
 
-  ssl: SSLCert;
+  // ssl: SSLCert;
 }
 
 export const config: BotConfiguration = {
@@ -94,11 +94,11 @@ export const config: BotConfiguration = {
   // Debug settings
   allowAll: process.env.ALLOW_ALL,
 
-  // SSL settings
-  ssl: {
-    key: readFileSync(process.env.SSL_KEY),
-    cert: readFileSync(process.env.SSL_CERT),
-  },
+  // SSL settings1
+  // ssl: {
+  //   key: readFileSync(process.env.SSL_KEY),
+  //   cert: readFileSync(process.env.SSL_CERT),
+  // },
 };
 
 // console.debug(`[config][DEBUG] config:\n${JSON.stringify(config, null, 2)}`);
