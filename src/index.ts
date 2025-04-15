@@ -5,7 +5,7 @@ import {
   UserState,
 } from "botbuilder";
 import express, { Response, Request, Router } from "express";
-import https, { ServerOptions } from "https";
+// import https, { ServerOptions } from "https";
 
 import "isomorphic-fetch";
 // import path from "path";
@@ -100,6 +100,7 @@ const bot: TeamsBot = new TeamsBot(
 const app = express();
 app.use(express.json());
 
+// Add an API router to the express app and mount the API routes
 const apiRouter: Router = Router();
 app.use("/api", apiRouter);
 apiRouter.use("/db", dbRouter);
@@ -109,14 +110,16 @@ apiRouter.use("/sharepoint", sharepointRouter);
 apiRouter.use("/technicians", techiniciansRouter);
 apiRouter.use("/logs", apiLogs);
 
-const options: ServerOptions = {
-  key: config.ssl.key,
-  cert: config.ssl.cert,
-};
+// Https server configuration
+// const options: ServerOptions = {
+//   key: config.ssl.key,
+//   cert: config.ssl.cert,
+// };
 
-const server = https
-  .createServer(options, app)
-  .listen(process.env.port || process.env.PORT || 3978, () => {
+// Create the server and listen on the specified port or default to 3978 if not specified
+const server = 
+  // https.createServer(options, app)
+  app.listen(process.env.port || process.env.PORT || 3978, () => {
     console.log(
       `[expressApp][INFO] Bot started, ${app.name} listening to`,
       server.address()
