@@ -1,0 +1,45 @@
+{
+    "type": "Container",
+    "items": [
+        {
+            "type": "TextBlock",
+            "size": "Medium",
+            "weight": "Bolder",
+            "text": "${text}",
+            "id": "${id}"
+        },
+        {
+            "type": "Container",
+            "selectAction": {
+                "id": "${id}",
+                "type": "Action.Submit",
+                "isEnabled": false,
+                "associatedInputs": "auto",
+                "data": {
+                    "action": {
+                        "verb": "selectChoiceTicket",
+                        "data": {
+                            "choice": "${id}",
+                            "sequenceId": "${sequenceId}",
+                            "gui": {
+                                "page": "1"
+                            }
+                        }
+                    }
+                }
+            },
+            "items": [
+                {
+                    "type": "Input.ChoiceSet",
+                    "id": "${id}",
+                    "placeholder": "${placeholder}",
+                    "style": "compact",
+                    "isRequired": "${required}",
+                    "isMultiSelect": false,
+                    "value": "",
+                    "choices": []
+                }
+            ]
+        }
+    ]
+}

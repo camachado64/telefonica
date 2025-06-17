@@ -1,125 +1,162 @@
 import { CardFactory, MessageFactory } from "botbuilder";
-import { CommandMessage, TriggerPatterns } from "@microsoft/teamsfx";
+import { TriggerPatterns } from "@microsoft/teamsfx";
 
 import * as ACData from "adaptivecards-templating";
 
 import {
-  AuthHandlerData,
-  CommandHandler,
-  HandlerTurnContext,
-} from "../handler";
-import {
-  TeamChannelMessage,
-  TeamChannel,
-  DELETED_MESSAGE,
-  MicrosoftGraphClient,
-} from "../../utils/graphClient";
+  HandlerMessage,
+  HandlerMessageContext,
+  HandlerState,
+} from "../manager";
+import { CommandHandler } from "../handler";
+import { HandlerTurnContext } from "../context";
 import { APIClient, Queues, TypedHyperlinkEntity } from "../../utils/apiClient";
+import { AdaptiveCardTicketCardPageData } from "../../utils/actions";
 
-import ticketCard from "../../adaptiveCards/templates/ticketCard.json";
+import page0 from "../../adaptiveCards/templates/ticket/page0.json";
 
 export class TicketCommandHandler extends CommandHandler {
   public pattern: TriggerPatterns = "/ticket";
-  public needsAuth: boolean = true;
 
-  constructor(
-    private readonly _apiClient: APIClient,
-    private readonly _graphClient: MicrosoftGraphClient
-  ) {
+  constructor(private readonly _apiClient: APIClient) {
     super();
   }
 
-  public async doRun(
+  /**
+   * @inheritdoc
+   */
+  public async run(
     handlerContext: HandlerTurnContext,
-    commandMessage: CommandMessage,
-    data?: AuthHandlerData
-  ): Promise<any> {
-    const userProfile = await this._graphClient.me();
+    commandMessage: HandlerMessage,
+    commandMessageContext: HandlerMessageContext
+  ): Promise<void> {
+    console.debug(
+      `[${TicketCommandHandler.name}][TRACE] ${this.run.name}@start`
+    );
 
-    let channel: TeamChannel | undefined;
-    let message: TeamChannelMessage | undefined;
-    let messageId: string | undefined;
-    if (data?.team?.aadGroupId && data?.channel?.id) {
-      channel = await this._graphClient.teamChannel(
-        data.team.aadGroupId,
-        data.channel.id
-      );
+    await handlerContext.switchToPersonalConversationAsync(
+      async (wrapper: HandlerTurnContext): Promise<void> => {
+        console.debug(
+          `[${TicketCommandHandler.name}][TRACE] ${this.run.name} handlerContext.switchToPersonalConversationAsync <anonymous>(wrapper: HandlerTurnContext) => Promise<void>@start`
+        );
 
-      if (data.conversation?.id?.indexOf(";") >= 0) {
-        messageId = data.conversation.id.split(";")[1];
-        messageId = messageId.replace("messageid=", "");
+        await this._doRun(wrapper, commandMessage, commandMessageContext); //, token);
 
-        message =
-          (await this._graphClient.teamChannelMessage(
-            data.team.aadGroupId,
-            data.channel.id,
-            messageId
-          )) ?? DELETED_MESSAGE;
+        console.debug(
+          `[${TicketCommandHandler.name}][TRACE] ${this.run.name} handlerContext.switchToPersonalConversationAsync <anonymous>(wrapper: HandlerTurnContext) => Promise<void>@end`
+        );
+
+        return;
       }
-    }
+    );
 
-    const cardJson = new ACData.Template(ticketCard).expand({
-      $root: {
-        command: commandMessage.text,
-        team: { ...(data?.team ?? { id: " ", name: " " }), choices: [] },
-        channel: {
-          id: data?.channel?.id ?? " ",
-          name: channel?.displayName ?? " ",
-          choices: [],
-        },
-        conversation: {
-          id: messageId ?? " ",
-          message: message?.subject ?? " ",
-          choices: [],
-        },
-        from: {
-          id: data?.from.id,
-          name: data?.from.name ?? " ",
-          aadObjectId: data?.from.aadObjectId,
-          email: userProfile.mail ?? " ",
-          choices: [],
-        },
-        ticket: {
-          state: {
-            id: "",
-            choices: await this._fetchStatusChoices(),
+    console.debug(`[${TicketCommandHandler.name}][TRACE] ${this.run.name}@end`);
+  }
+
+  private async _doRun(
+    handlerContext: HandlerTurnContext,
+    handlerMessage: HandlerMessage,
+    handlerMessageContext: HandlerMessageContext
+    // token?: Partial<TokenResponse>
+  ): Promise<void> {
+    console.debug(
+      `[${TicketCommandHandler.name}][TRACE] ${this._doRun.name}@start`
+    );
+
+    const data: HandlerMessageContext = handlerMessageContext;
+    const state: HandlerState = handlerContext.state;
+
+    console.debug(
+      `[${TicketCommandHandler.name}][DEBUG] ${this._doRun.name} handlerState.sequenceId: ${state.sequenceId}`
+    );
+
+    // console.debug(
+    //   `[${TicketCommandHandler.name}][DEBUG] ${
+    //     this._doRun.name
+    //   } handlerState:\n${JSON.stringify(state, null, 2)}`
+    // );
+
+    // Fetches the queue choices for the ticket
+    const queueChoices: { title: string; value: string }[] =
+      await this._fetchQueueChoices();
+
+    // Fetches the status choices for the ticket
+    const statusChoices: { title: string; value: string }[] =
+      await this._fetchStatusChoices();
+
+    // Creates a new ticket state in the handler state
+    state.ticket = {
+      startedAt: new Date(),
+      ticketStateChoiceSet: {
+        value: "",
+        choices: statusChoices,
+      },
+      ticketCategoryChoiceSet: {
+        value: "",
+        choices: queueChoices,
+        required: false
+      },
+      ticketDescriptionInput: {
+        value: "",
+      },
+    };
+
+    // Creates the 'startedAt' containing the time this card was sent in the 'es-ES' locale format
+    const startedAt: string = state.ticket.startedAt.toLocaleString("es-ES", {
+      timeZone: "UTC",
+      month: "long",
+      day: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+
+    const cardData: AdaptiveCardTicketCardPageData = {
+      sequenceId: state.sequenceId,
+      ticket: state.ticket,
+      gui: {
+        page: 0,
+        header: {
+          startedAt: startedAt,
+          from: {
+            name: data?.replyFrom?.name ?? " ",
+            email: data?.replyFrom?.email ?? " ",
           },
-          queue: {
-            id: "",
-            choices: await this._fetchQueueChoices(),
-          },
-          description: "",
         },
-        createdUtc: new Date().toLocaleString("es-ES", {
-          timeZone: "UTC",
-          month: "long",
-          day: "2-digit",
-          year: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-        }),
-        token: data.token,
-        gui: {
-          buttons: {
-            visible: true,
-            create: {
-              label: "Crear Incidencia",
-              enabled: true,
-            },
-            cancel: {
-              label: "Cancelar",
-              tooltip: "Cancela la creación de la incidencia",
-              enabled: true,
-            },
+        context: {
+          team: data?.team?.name ?? " ",
+          channel: data?.channel?.displayName ?? " ",
+          conversation: data?.thread?.subject ?? " ",
+        },
+        buttons: {
+          visible: true,
+          create: {
+            title: "Seguiente", // "Crear Incidencia",
+            tooltip: "Seguir con la creación de la incidencia",
+            enabled: false,
+          },
+          cancel: {
+            title: "Cancelar",
+            tooltip: "Cancela la creación de la incidencia",
+            enabled: true,
           },
         },
       },
+    };
+
+    // Expands the adaptive card template with the data provided
+    const cardJson = new ACData.Template(page0).expand({
+      $root: cardData,
     });
 
     // Sends the adaptive card
     await handlerContext.context.sendActivity(
       MessageFactory.attachment(CardFactory.adaptiveCard(cardJson))
+    );
+
+    console.debug(
+      `[${TicketCommandHandler.name}][TRACE] ${this._doRun.name}@end`
     );
   }
 
@@ -129,9 +166,11 @@ export class TicketCommandHandler extends CommandHandler {
     // Status choices array containing the title and value of each status to be displayed in the adaptive card
     return [
       { title: "Abierto", value: "open" },
-      { title: "Cerrado", value: "closed" },
+      { title: "Nuevo", value: "new" },
+      // { title: "Estancado", value: "stalled" },  // Not allowed in main queue
       { title: "Resuelto", value: "resolved" },
-      { title: "Rechazado", value: "rejected" },
+      // { title: "Rechazado", value: "rejected" }, // Not allowed in main queue
+      // { title: "Borrado", value: "deleted" },    // Not allowed in main queue
     ];
   }
 
@@ -180,12 +219,6 @@ export class TicketCommandHandler extends CommandHandler {
       if (queues?.items?.length <= 0) {
         break;
       }
-
-      console.debug(
-        `[${TicketCommandHandler.name}][DEBUG] ${
-          this.run.name
-        } queues:\n${JSON.stringify(queues, null, 2)}`
-      );
 
       // Convert the queue references to queue choices and add them to the queue choices array
       for (const queueRef of queues.items) {

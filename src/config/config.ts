@@ -1,4 +1,4 @@
-import { readFileSync } from "fs";
+// import { readFileSync } from "fs";
 
 import { config as dotEnv } from "dotenv";
 
@@ -12,7 +12,7 @@ dotEnv({
   path: "./env/.env.local",
   debug: true,
   encoding: "utf8",
-  override: true,
+  override: true, // Override existing environment variables to allow for local hotswapping
 });
 
 // export interface SSLCert {
@@ -101,4 +101,22 @@ export const config: BotConfiguration = {
   // },
 };
 
-// console.debug(`[config][DEBUG] config:\n${JSON.stringify(config, null, 2)}`);
+// Create a safe version of the config object to avoid logging sensitive information
+// like passwords or secrets
+const safeConfig: Partial<BotConfiguration> = {};
+const configKeys: (keyof BotConfiguration)[] = Object.keys(
+  config
+) as (keyof BotConfiguration)[];
+configKeys.forEach((key: keyof BotConfiguration) => {
+  if (
+    key.toLowerCase().indexOf("password") < 0 &&
+    key.toLowerCase().indexOf("secret") < 0
+  ) {
+    // This is to avoid logging sensitive information like passwords or secrets
+    const safeKey = key as string;
+    safeConfig[safeKey] = config[key];
+  }
+});
+console.debug(
+  `[config][DEBUG] config:\n${JSON.stringify(safeConfig, null, 2)}`
+);

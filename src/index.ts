@@ -1,3 +1,8 @@
+// Overrides the 'console.debug' and  method to add a timestamp to the debug messages
+console.debug = (message: string, ...optionalParams: any[]): void => {
+  console.log(`[${new Date().toISOString()}]${message}`, ...optionalParams);
+};
+
 import {
   ConversationState,
   MemoryStorage,
@@ -12,17 +17,20 @@ import "isomorphic-fetch";
 // import send from "send";
 
 import { TeamsBot } from "./bots/teamsBot";
+import { HandlerManager, OAuthAwareHandlerManager } from "./commands/manager";
 import {
   ConversationReferenceStore,
-  DefaultHandlerManager,
-  HandlerContextManager,
-  HandlerManager,
-} from "./commands/handlerManager";
+  DefaultHandlerTurnContextHelper,
+  HandlerTurnContextHelper,
+} from "./commands/context";
+import { DefaultDialogManager, DialogManager } from "./dialogs/manager";
+import { OAuthDialog } from "./dialogs/oauthDialog";
+
 import { TicketCommandHandler } from "./commands/ticket/ticket";
-import { AuthCommandDispatchDialog } from "./dialogs/authCommandDispatchDialog";
 import { AuthRefreshActionHandler } from "./adaptiveCards/actions/authRefresh/authRefresh";
-import { TicketAdaptiveCardCreateActionHandler } from "./adaptiveCards/actions/ticket/create";
-import { TicketAdaptiveCardCancelActionHandler } from "./adaptiveCards/actions/ticket/cancel";
+import { TicketAdaptiveCardPositiveActionHandler } from "./adaptiveCards/actions/ticket/positive";
+import { TicketAdaptiveCardCancelActionHandler } from "./adaptiveCards/actions/ticket/negative";
+import { TicketAdaptiveCardSelectChoiceActionHandler } from "./adaptiveCards/actions/ticket/selectChoice";
 
 import { commandBot } from "./config/initialize";
 import { config } from "./config/config";
@@ -36,6 +44,7 @@ import { router as ticketRouter } from "./api/ticket";
 import { router as graphRouter } from "./api/graph";
 import { router as sharepointRouter } from "./api/sharepoint";
 import { router as dbRouter } from "./api/db";
+
 
 // Define the state store for your bot.
 // See https://aka.ms/about-bot-state to learn more about using MemoryStorage.
@@ -51,40 +60,43 @@ export const userState: UserState = new UserState(memoryStorage);
 // Define a simple conversation reference store
 const conversationStore: ConversationReferenceStore = {};
 
+// Creates the dialog manager
+const dialogManager: DialogManager = new DefaultDialogManager();
+
 // Create the context manager
-const contextManager: HandlerContextManager = new HandlerContextManager(
-  config,
-  conversationStore
-);
+const contextHelper: HandlerTurnContextHelper =
+  new DefaultHandlerTurnContextHelper(config, conversationStore);
 
 // Create the handler manager
-const handlerManager: HandlerManager = new DefaultHandlerManager(
-  contextManager,
+const handlerManager: HandlerManager = new OAuthAwareHandlerManager(
+  graphClient,
+  contextHelper,
+  dialogManager,
   {
-    commands: [new TicketCommandHandler(apiClient, graphClient)],
+    commands: [new TicketCommandHandler(apiClient)],
     actions: [
       new AuthRefreshActionHandler(),
-      new TicketAdaptiveCardCreateActionHandler(
+      new TicketAdaptiveCardPositiveActionHandler(
         config,
         apiClient,
         graphClient,
         logsRepository
       ),
       new TicketAdaptiveCardCancelActionHandler(graphClient),
+      new TicketAdaptiveCardSelectChoiceActionHandler(apiClient),
     ],
   }
 );
 
 // Create the auth flow dialog
-const dialog: AuthCommandDispatchDialog = new AuthCommandDispatchDialog(
+const dialog: OAuthDialog = new OAuthDialog(
   config,
   conversationState,
   new MemoryStorage(),
   handlerManager
 );
-
-// Register the dialog with the context manager
-contextManager.registerDialog(dialog);
+// Register the dialog with the dialog manager
+dialogManager.registerDialog(dialog);
 
 // Create the activity handler.
 const bot: TeamsBot = new TeamsBot(
@@ -92,7 +104,7 @@ const bot: TeamsBot = new TeamsBot(
   conversationState,
   userState,
   handlerManager,
-  dialog,
+  dialogManager,
   techRepository
 );
 
@@ -117,7 +129,7 @@ apiRouter.use("/logs", apiLogs);
 // };
 
 // Create the server and listen on the specified port or default to 3978 if not specified
-const server = 
+const server =
   // https.createServer(options, app)
   app.listen(process.env.port || process.env.PORT || 3978, () => {
     console.log(

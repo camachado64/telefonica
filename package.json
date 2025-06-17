@@ -9,6 +9,7 @@
   },
   "main": "./lib/index.js",
   "scripts": {
+    "dev:ngrok": "ngrok http 3978 --host-header=\"localhost:3978\"",
     "dev:teamsfx": "env-cmd --silent -f .localConfigs npm run dev",
     "dev": "nodemon --watch ./src --exec node --inspect=9239 --signal SIGINT -r ts-node/register ./src/index.ts",
     "build": "tsc --build",
@@ -36,6 +37,7 @@
     "ticket-bot": "file:"
   },
   "devDependencies": {
+    "@microsoft/microsoft-graph-types": "^2.40.0",
     "@types/express": "^5.0.0",
     "@types/json-schema": "^7.0.15",
     "@types/mssql": "^9.1.6",

@@ -8,11 +8,7 @@
             "type": "Action.Execute",
             "verb": "authRefresh",
             "data": {
-                "team": "${team}",
-                "channel": "${channel}",
-                "conversation": "${conversation}",
-                "from": "${from}",
-                "command": "${command}"
+                "sequenceId": "${sequenceId}"
             }
         },
         "userIds": [

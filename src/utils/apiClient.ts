@@ -1,17 +1,17 @@
 import { BotConfiguration } from "../config/config";
-import {
-  DefaultMicrosoftGraphClient,
-  MicrosoftGraphClient,
-  TeamChannelMessage,
-} from "./graphClient";
-import { Required } from "./types";
+import { MicrosoftGraphClient, TeamChannelMessage } from "./graphClient";
+import { HttpContentTypes, HttpHeaders, HttpMethods } from "./http";
+import { logError } from "./logging";
+import { Required, TypeUtils } from "./types";
 
 export type HyperlinkEntity = Partial<{
-  _url: string;
-  ref: string;
   id: string;
-  type: string;
   name: string;
+
+  type: string;
+  ref: HyperlinkType;
+
+  _url: string;
 
   from: string;
   to: string;
@@ -30,15 +30,27 @@ export type CustomFieldHyperlink = TypedHyperlinkEntity &
     values?: string[];
   };
 
+export enum HyperlinkType {
+  Self = "self",
+  User = "user",
+  Queue = "queue",
+  Ticket = "ticket",
+  CustomField = "customfield",
+  CustomFieldValue = "customfieldvalue",
+  Create = "create",
+  Comment = "comment",
+  History = "history",
+}
+
 export interface PagedCollection<T> {
   items: T[];
-  next_page?: string;
-  prev_page?: string;
   page: number;
   per_page: number;
   total: number;
   pages: number;
   count: number;
+  next_page?: string;
+  prev_page?: string;
 }
 
 export interface TicketHistory extends PagedCollection<TypedHyperlinkEntity> {}
@@ -48,6 +60,7 @@ export interface Queues extends PagedCollection<TypedHyperlinkEntity> {}
 export interface Queue {
   id: string;
   Name: string;
+  TicketCustomFields: CustomFieldHyperlink[];
   _hyperlinks: RefHyperlinkEntity[];
 }
 
@@ -92,8 +105,39 @@ export interface Ticket {
   _hyperlinks: RefHyperlinkEntity[];
 }
 
+export interface CustomField {
+  id: string;
+  Name: string;
+  Description: string;
+  Values: string[];
+  Type: "Select" | "Freeform" | string;
+  Disabled: "0" | "1";
+  MaxValues: number;
+  Pattern: string;
+  BasedOn?: TypedHyperlinkEntity;
+  Dependents?: CustomField[];
+  _hyperlinks: RefHyperlinkEntity[];
+}
+
+export interface CustomFieldValue {
+  id: string;
+  Name: string;
+  Description: string;
+  Category: string;
+  _hyperlinks: RefHyperlinkEntity[];
+}
+
+export interface User {
+  id: string;
+  Name: string;
+  Email: string;
+  RealName: string;
+  Privileged: "0" | "1";
+  _hyperlinks: RefHyperlinkEntity[];
+}
+
 export class APIClient {
-  private _cookie: string | null;
+  private _cookie: string | null = null;
 
   constructor(private readonly _config: BotConfiguration) {}
 
@@ -106,21 +150,21 @@ export class APIClient {
 
     // Fetch the cookie from the API using the supplied credentials
     const cookie: string | null = await fetch(`${this._config.apiEndpoint}`, {
-      method: "POST",
+      method: HttpMethods.Post,
       headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        Accept:
-          "text/html,\
-          application/xhtml+xml,\
-          application/xml;0.9,\
-          image/avif,\
-          image/webp,\
-          image/apng;q=0.9,\
-          image/avif,\
-          image/webp,\
-          image/apng,\
-          /;q=0.8,\
-          application/signed-exchange;v=b3;q=0.7",
+        [HttpHeaders.ContentType]: HttpContentTypes.FormUrlEncoded,
+        // Accept:
+        //   "text/html,\
+        //   application/xhtml+xml,\
+        //   application/xml;0.9,\
+        //   image/avif,\
+        //   image/webp,\
+        //   image/apng;q=0.9,\
+        //   image/avif,\
+        //   image/webp,\
+        //   image/apng,\
+        //   /;q=0.8,\
+        //   application/signed-exchange;v=b3;q=0.7",
       },
       body: new URLSearchParams({
         user: this._config.apiUsername,
@@ -147,6 +191,13 @@ export class APIClient {
         //     );
         //   }
 
+        if (!response.ok) {
+          // If the response is not OK, throw an error to be caught by the catch block below
+          throw new Error(
+            `Failed to login to API. Status: ${response.status}, Status Text: ${response.statusText}`
+          );
+        }
+
         // Gets the Set-Cookie header from the response
         const setCookies = response.headers.getSetCookie();
         if (setCookies) {
@@ -155,18 +206,11 @@ export class APIClient {
         }
 
         // If the Set-Cookie header is not found, throw an error to be caught by the catch block below
-        throw new Error("El header Set-Cookie no fue encontrado.");
+        throw new Error("No Set-Cookie header found in the response.");
       })
-      .catch((error: Error) => {
-        // Catches any errors that occur during the login process
-
-        console.error(
-          `[${APIClient.name}][ERROR] ${
-            this.login.name
-          } error:\n${JSON.stringify(error, null, 2)}`
-        );
-
-        // Returns null if an error occurs
+      .catch((error: any) => {
+        // Catches any errors that occur during the login process, logs the error, and returns null
+        logError(APIClient.name, this.login.name, error);
         return null;
       });
 
@@ -186,10 +230,10 @@ export class APIClient {
 
     // Fetch the data from the API as a GET request
     return fetch(url, {
-      method: "GET",
+      method: HttpMethods.Get,
       headers: {
-        Cookie: this._cookie,
-        Accept: "application/json",
+        Cookie: this._cookie!,
+        Accept: HttpContentTypes.Json,
       },
     }).then((response: Response): Promise<T> => {
       // Return the JSON response from the API
@@ -238,7 +282,7 @@ export class APIClient {
       this._cookie = await this.login();
     }
 
-    if (typeof queue === "string") {
+    if (TypeUtils.isString(queue)) {
       // If the queue is a string, convert it to a hyperlink entity
       queue = {
         id: queue,
@@ -262,7 +306,20 @@ export class APIClient {
     return this.get<Queue>(`${queue._url}`);
   }
 
-  public async createTicket(queue: Queue, subject: string): Promise<Ticket> {
+  public async createTicket(
+    queue: Queue,
+    subject: string,
+    status: string,
+    description: string,
+    requestorEmail: string,
+    ownerEmail: string,
+    customFields: {
+      [key: string]: {
+        text: string;
+        value: string;
+      };
+    }
+  ): Promise<Ticket> {
     if (!this._cookie) {
       // If the cookie is not set, login to the API and set the cookie
       this._cookie = await this.login();
@@ -274,32 +331,69 @@ export class APIClient {
       } queue:\n${JSON.stringify(queue, null, 2)}`
     );
 
+    const endpoint: string = queue._hyperlinks.find((v: RefHyperlinkEntity) => v.ref === "create")._url;
+
     console.debug(
-      `[${APIClient.name}][DEBUG] ${this.createTicket.name} endpoint: ${`${
-        queue._hyperlinks.find((v: RefHyperlinkEntity) => v.ref === "create")
-          ._url
-      }`}`
+      `[${APIClient.name}][DEBUG] ${this.createTicket.name} endpoint: ${endpoint}`
+    );
+
+    const customFieldsBody: { [key: string]: string } = {};
+    if (customFields && Object.keys(customFields).length > 0) {
+      // If custom fields are provided, convert them to the expected format
+      for (const [_, value] of Object.entries(customFields)) {
+        customFieldsBody[value.text] = value.value;
+      }
+    }
+
+    const ownerUser: User = await this.user(ownerEmail);
+
+    console.debug(
+      `[${APIClient.name}][DEBUG] ${
+        this.createTicket.name
+      } body:\n${JSON.stringify(
+        JSON.stringify(
+          {
+            Subject: subject,
+            Status: status,
+            Content: description,
+            CustomFields: customFieldsBody,
+            Requestor: requestorEmail,
+            Owner: ownerUser?.Name,
+          },
+          null,
+          2
+        )
+      )}`
     );
 
     // Create the ticket using the supplied queue and subject
     const createTicket: CreateTicket = await fetch(
-      `${
-        queue._hyperlinks.find((v: RefHyperlinkEntity) => v.ref === "create")
-          ._url
-      }`,
+      endpoint,
       {
-        method: "POST",
+        method: HttpMethods.Post,
         headers: {
           Cookie: this._cookie,
-          "Content-Type": "application/json",
+          [HttpHeaders.ContentType]: HttpContentTypes.Json,
         },
         body: JSON.stringify({
           Subject: subject,
+          Status: status,
+          Content: description,
+          CustomFields: customFieldsBody,
+          // Creator: creator,
+          Requestor: requestorEmail,
+          Owner: ownerUser?.Name,
         }),
       }
     ).then((response: Response): Promise<CreateTicket> => {
       return response?.json();
     });
+
+    console.debug(
+      `[${APIClient.name}][DEBUG] ${
+        this.createTicket.name
+      } createTicket:\n${JSON.stringify(createTicket, null, 2)}`
+    );
 
     return await this.ticket(createTicket);
   }
@@ -327,17 +421,17 @@ export class APIClient {
       this._cookie = await this.login();
     }
 
+    const endpoint = ticket._hyperlinks.find((v) => v.ref === "self")._url;
+
     console.debug(
-      `[${APIClient.name}][DEBUG] ${this.updateTicket.name} endpoint: ${
-        ticket._hyperlinks.find((v) => v.ref === "self")._url
-      }`
+      `[${APIClient.name}][DEBUG] ${this.updateTicket.name} endpoint: ${endpoint}`
     );
 
-    return fetch(ticket._hyperlinks.find((v) => v.ref === "self")._url, {
-      method: "PUT",
+    return fetch(endpoint, {
+      method: HttpMethods.Put,
       headers: {
         Cookie: this._cookie,
-        "Content-Type": "application/json",
+        [HttpHeaders.ContentType]: HttpContentTypes.Json,
       },
       body: JSON.stringify({
         Status: ticket.Status,
@@ -357,9 +451,7 @@ export class APIClient {
     }
 
     console.debug(
-      `[${APIClient.name}][DEBUG] ${
-        this.addTicketComment.name
-      } message:\n${JSON.stringify(message, null, 2)}`
+      `[${APIClient.name}][DEBUG] ${this.addTicketComment.name} message.id:${message.id}, message.@odata.context: ${message["@odata.context"]}`
     );
 
     console.debug(
@@ -410,18 +502,18 @@ export class APIClient {
       }
     }
 
-    const createComment = await fetch(
+    const createComment: string[] = await fetch(
       `${ticket._hyperlinks.find((v) => v.ref === "comment")._url}`,
       {
-        method: "POST",
+        method: HttpMethods.Post,
         headers: {
           Cookie: this._cookie,
-          "Content-Type": "application/json",
+          [HttpHeaders.ContentType]: HttpContentTypes.Json,
         },
         body: JSON.stringify({
           Subject: `Respuesta de ${message.from.user.displayName}`,
           Content: message.body.content,
-          ContentType: "text/html",
+          ContentType: HttpContentTypes.Html,
           TimeTaken: "1",
           Attachments: attachments,
         }),
@@ -461,5 +553,161 @@ export class APIClient {
     );
 
     return history;
+  }
+
+  public async queueCustomFields(queueId: string): Promise<CustomField[]> {
+    if (!this._cookie) {
+      this._cookie = await this.login();
+    }
+
+    if (!queueId) {
+      // If the queue ID is not provided, throw an error
+      throw new Error("Queue ID is required to fetch custom fields.");
+    }
+
+    const queue: Queue = await this.queue(queueId);
+
+    const customFields = [];
+    if (!queue || !queue.TicketCustomFields) {
+      // If the queue is not provided or it does not have 'TicketCustomFields', return an empty array
+      return customFields;
+    }
+
+    for (const hyperlink of queue.TicketCustomFields) {
+      if (hyperlink.ref === "customfield") {
+        // If the hyperlink is of type 'customfield', fetch the custom fields
+        const customField: CustomField = await this.get<CustomField>(
+          hyperlink._url
+        );
+
+        if (!customField || !customField.id) {
+          // If the custom field is not found or does not have an ID, skip it
+          continue;
+        }
+
+        console.debug(
+          `[${APIClient.name}][DEBUG] ${
+            this.queueCustomFields.name
+          } customField:\n${JSON.stringify(customField, null, 2)}`
+        );
+
+        customFields.push(customField);
+      }
+    }
+
+    return customFields;
+  }
+
+  public async customFieldValues(
+    customFieldId: string,
+    value: string
+  ): Promise<CustomFieldValue[]> {
+    if (!this._cookie) {
+      this._cookie = await this.login();
+    }
+
+    if (!customFieldId) {
+      // If the custom field ID is not provided, throw an error
+      throw new Error("Custom field ID is required to fetch choices.");
+    }
+
+    console.debug(
+      `[${APIClient.name}][DEBUG] ${
+        this.customFieldValues.name
+      } endpoint: ${`${this._config.apiEndpoint}/REST/2.0/customfield/${customFieldId}/values`}`
+    );
+
+    console.debug(
+      `[${APIClient.name}][DEBUG] ${this.customFieldValues.name} value: ${value}`
+    );
+
+    // Fetch the custom field choices
+    return await this.get<PagedCollection<TypedHyperlinkEntity>>(
+      `${this._config.apiEndpoint}/REST/2.0/customfield/${customFieldId}/values`
+    ).then(
+      async (
+        response: PagedCollection<TypedHyperlinkEntity>
+      ): Promise<CustomFieldValue[]> => {
+        // Convert the response to an array of CustomFieldValue objects
+        if (!response || response.items?.length === 0) {
+          // If the response is empty, return an empty array
+          return [];
+        }
+
+        // Map the response to CustomFieldValue objects
+        const customFieldValues: CustomFieldValue[] = [];
+        for (const ref of response.items) {
+          if (ref.type !== "customfieldvalue") {
+            continue;
+          }
+
+          const customFieldValue: CustomFieldValue =
+            await this.get<CustomFieldValue>(ref._url);
+          if (!customFieldValue || !customFieldValue.id) {
+            // If the custom field value is not found or does not have an ID, skip it
+            continue;
+          }
+
+          if (customFieldValue.Category === value) {
+            customFieldValues.push(customFieldValue);
+          }
+        }
+
+        const total: number = response.total;
+        let seen: number = response.count;
+        let page: number = response.page;
+        while (seen <= total) {
+          const nextResponse: PagedCollection<TypedHyperlinkEntity> =
+            await this.get<PagedCollection<TypedHyperlinkEntity>>(
+              `${
+                this._config.apiEndpoint
+              }/REST/2.0/customfield/${customFieldId}/values?page=${++page}`
+            );
+          if (!nextResponse || nextResponse.items?.length === 0) {
+            break;
+          }
+
+          seen += nextResponse.count;
+
+          console.debug(
+            `[${APIClient.name}][DEBUG] ${this.customFieldValues.name} seen: ${seen}`
+          );
+
+          for (const ref of nextResponse.items) {
+            if (ref.type !== "customfieldvalue") {
+              continue;
+            }
+
+            const customFieldValue: CustomFieldValue =
+              await this.get<CustomFieldValue>(ref._url);
+            if (!customFieldValue || !customFieldValue.id) {
+              // If the custom field value is not found or does not have an ID, skip it
+              continue;
+            }
+
+            if (customFieldValue.Category === value) {
+              customFieldValues.push(customFieldValue);
+            }
+          }
+        }
+
+        return customFieldValues;
+      }
+    );
+  }
+
+  public async user(email: string): Promise<User> {
+    if (!this._cookie) {
+      this._cookie = await this.login();
+    }
+
+    console.debug(
+      `[${APIClient.name}][DEBUG] ${this.user.name} email: ${email}`
+    );
+
+    // Fetch the user by email
+    return await this.get<User>(
+      `${this._config.apiEndpoint}/REST/2.0/user/${email}`
+    );
   }
 }

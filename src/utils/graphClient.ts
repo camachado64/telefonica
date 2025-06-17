@@ -1,11 +1,29 @@
-import { AccessToken, ClientSecretCredential } from "@azure/identity";
 import {
   AuthProviderCallback,
   Client,
 } from "@microsoft/microsoft-graph-client";
 
 import { BotConfiguration } from "../config/config";
-import { MicrosoftTokenResponse } from "./types";
+import { HttpContentTypes, HttpHeaders, HttpMethods } from "./http";
+
+export interface TokenResponse {
+  token_type: "Bearer" | string;
+  scope: string;
+  started_at: Date;
+  expires_in: number;
+  ext_expires_in: number;
+  access_token: string;
+}
+
+export interface TokenErrorResponse {
+  error: string;
+  error_description: string;
+  error_codes: number[];
+  timestamp: string;
+  trace_id: string;
+  correlation_id: string;
+  suberror: string;
+}
 
 export enum ApplicationIdentityType {
   BOT = "bot",
@@ -187,6 +205,8 @@ export const DELETED_MESSAGE: TeamChannelMessage = {
 };
 
 export interface MicrosoftGraphClient {
+  health(): Promise<TokenResponse | Error>;
+
   me(): Promise<Me | null>;
 
   teams(): Promise<Teams | null>;
@@ -240,13 +260,25 @@ export class DefaultMicrosoftGraphClient implements MicrosoftGraphClient {
 
   private readonly _client: Client;
 
-  constructor(config: BotConfiguration, options: MicrosoftGraphClientOptions) {
+  constructor(
+    private readonly _config: BotConfiguration,
+    private readonly _options: MicrosoftGraphClientOptions
+  ) {
     this._client = Client.init({
-      debugLogging: true,
+      debugLogging: false,
       authProvider: async (done: AuthProviderCallback): Promise<void> => {
-        await this._authProvider(done, config, options);
+        await this._authProvider(done, this._config, this._options);
       },
     });
+  }
+
+  public async health(): Promise<TokenResponse | Error> {
+    console.debug(
+      `[${DefaultMicrosoftGraphClient.name}][DEBUG] ${this.health.name}`
+    );
+
+    // Attempt to connect to the Graph API
+    return await this._getToken(this._config, this._options);
   }
 
   private async _authProvider(
@@ -265,11 +297,11 @@ export class DefaultMicrosoftGraphClient implements MicrosoftGraphClient {
   private async _getToken(
     config: BotConfiguration,
     options: MicrosoftGraphClientOptions
-  ): Promise<MicrosoftTokenResponse | Error> {
+  ): Promise<TokenResponse | Error> {
     const response = await fetch(`${config.authority}/oauth2/v2.0/token`, {
-      method: "POST",
+      method: HttpMethods.Post,
       headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
+        [HttpHeaders.ContentType]: HttpContentTypes.FormUrlEncoded,
       },
       body: new URLSearchParams({
         grant_type: "password",
@@ -280,24 +312,39 @@ export class DefaultMicrosoftGraphClient implements MicrosoftGraphClient {
         password: options?.password,
       }),
     })
-      .then<MicrosoftTokenResponse>(
-        (response: Response): Promise<MicrosoftTokenResponse> => {
+      .then<TokenResponse>(
+        async (response: Response): Promise<TokenResponse> => {
+          if (!response.ok) {
+            // If the response is not ok, throw the response as an error
+            throw await response.json();
+          }
           return response.json();
         }
       )
-      .then((response: MicrosoftTokenResponse): MicrosoftTokenResponse => {
+      .then((response: TokenResponse): TokenResponse => {
+        if ("error" in response) {
+          // Sanity check to ensure the response is not an error, should never happen
+          // If the response contains an "error" field, log it and throw an error
+          console.error(
+            `[${DefaultMicrosoftGraphClient.name}][ERROR] ${
+              this._getToken.name
+            } error:\n${JSON.stringify(response, null, 2)}`
+          );
+
+          // Throw the response as an error
+          throw response;
+        }
+
         return {
           ...response,
           started_at: new Date(),
         };
       })
-      .catch((error: Error): Error => {
+      .catch((error: TokenErrorResponse): Error => {
         // Catches any errors that occur during the request
 
         console.error(
-          `[${DefaultMicrosoftGraphClient.name}][ERROR] ${
-            this._getToken.name
-          } error:\n${JSON.stringify(error, null, 2)}`
+          `[${DefaultMicrosoftGraphClient.name}][ERROR] ${this._getToken.name} error: ${error.error_description}`
         );
 
         // Return the error if there is an error during the request if the error is an instance of 'Error'
@@ -305,7 +352,7 @@ export class DefaultMicrosoftGraphClient implements MicrosoftGraphClient {
         if (error instanceof Error) {
           return error;
         }
-        return new Error(error);
+        return new Error(error.error_description);
       });
 
     // console.debug(
@@ -423,7 +470,7 @@ export class DefaultMicrosoftGraphClient implements MicrosoftGraphClient {
     teamAadGroupId: string,
     channelId: string,
     threadId: string
-  ): Promise<TeamChannelMessage | null> {
+  ): Promise<TeamChannelMessage> {
     // Get the team's channel message from the '/teams/{team-id}/channels/{channel-id}/messages/{thread-id}' endpoint of Microsoft Graph API
     return await this._client
       .api(
@@ -431,7 +478,7 @@ export class DefaultMicrosoftGraphClient implements MicrosoftGraphClient {
       )
       .version("beta")
       .get()
-      .catch((error: any) => {
+      .catch((error: any): TeamChannelMessage | never => {
         // Catches any errors that occur during the request
 
         console.error(
@@ -441,10 +488,14 @@ export class DefaultMicrosoftGraphClient implements MicrosoftGraphClient {
         );
 
         // Return a deleted message placeholder if there is an error
-        return {
-          ...DELETED_MESSAGE,
-          id: threadId,
-        };
+        if (error.statusCode === "404") {
+          // If the error is a 404, it means the message was deleted
+          return {
+            ...DELETED_MESSAGE,
+            id: threadId,
+          };
+        }
+        throw error;
       });
   }
 

@@ -1,6 +1,7 @@
 import { Router, Response, Request, NextFunction } from "express";
 
 import { graphClient } from "../config/graph";
+import { TokenResponse } from "../utils/graphClient";
 
 export const router = Router();
 
@@ -17,40 +18,38 @@ router.get(
     );
 
     // Attempt to connect to the Graph API using the graphClient instance with a me request
-    const me = await graphClient.me();
-    if (me instanceof Error) {
-      console.error(
-        `[${req.method} ${req.url}][ERROR] error:\n${JSON.stringify(
-          me,
-          null,
-          2
-        )}`
-      );
+    await graphClient
+      .health()
+      .then((response: TokenResponse) => {
+        // Return a 200 status code to indicate that the API is running
+        res
+          .status(200)
+          .send(
+            JSON.stringify({ status: 200, data: { token: response } }, null, 2)
+          );
+      })
+      .catch((error: Error) => {
+        // Catches any errors that occur during the connection check
 
-      res.status(503).send(
-        JSON.stringify(
-          {
-            status: 503,
-            data: { message: "Microsoft Graph API connection failed" },
-          },
-          null,
-          2
-        )
-      );
-    } else {
-      // Return a 200 status code to indicate that the API connection was successful
-      res.status(200).send(
-        JSON.stringify(
-          {
-            status: 200,
-            data: { message: "API connection successful", me },
-          },
-          null,
-          2
-        )
-      );
-    }
+        console.error(
+          `[${req.method} ${req.url}][ERROR] error:\n${JSON.stringify(
+            error,
+            null,
+            2
+          )}`
+        );
 
+        // Return a 503 status code to indicate that the API is not running
+        res
+          .status(503)
+          .send(
+            JSON.stringify(
+              { status: 503, data: { message: "API connection failed" } },
+              null,
+              2
+            )
+          );
+      });
     next();
   }
 );

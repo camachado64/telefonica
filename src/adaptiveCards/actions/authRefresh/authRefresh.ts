@@ -1,6 +1,13 @@
-import { TriggerPatterns, CommandMessage } from "@microsoft/teamsfx";
+import { DialogTurnResult } from "botbuilder-dialogs";
+import { TriggerPatterns } from "@microsoft/teamsfx";
 
-import { ActionHandler, HandlerTurnContext } from "../../../commands/handler";
+import {
+  HandlerMessage,
+  HandlerMessageContext,
+} from "../../../commands/manager";
+import { ActionHandler } from "../../../commands/handler";
+import { HandlerTurnContext } from "../../../commands/context";
+import { OAuthDialog } from "../../../dialogs/oauthDialog";
 import {
   AdaptiveCardActionActivityValue,
   AdaptiveCardActionAuthRefreshDataOutput,
@@ -13,35 +20,52 @@ export class AuthRefreshActionHandler extends ActionHandler {
    * @inheritDoc
    */
   public async run(
-    ctx: HandlerTurnContext,
-    _: CommandMessage,
-    __?: any
+    handlerContext: HandlerTurnContext,
+    handlerMessage: HandlerMessage,
+    handlerMessageContext: HandlerMessageContext
   ): Promise<any> {
     console.debug(
-      `[${AuthRefreshActionHandler.name}][DEBUG] [${this.run.name}]`
+      `[${AuthRefreshActionHandler.name}][TRACE] ${this.run.name}@start`
     );
 
-    // Delete any previously sent message by the bot
-    await ctx.context.deleteActivity(ctx.context.activity.replyToId);
-
-    if (ctx.context.activity.conversation.isGroup) {
+    if (handlerContext.context.activity.conversation.isGroup) {
       // This action should only ever be triggered in a personal context, do nothing if it isn't
       return;
     }
 
+    // Delete any previously sent message by the bot
+    await handlerContext.context.deleteActivity(
+      handlerContext.context.activity.replyToId
+    );
+
     // Extract the data from the action
-    const value: AdaptiveCardActionActivityValue = ctx.context.activity.value;
+    const value: AdaptiveCardActionActivityValue =
+      handlerContext.context.activity.value;
     const cardData: AdaptiveCardActionAuthRefreshDataOutput = value.action.data;
 
+    console.debug(
+      `[${AuthRefreshActionHandler.name}][DEBUG] ${
+        this.run.name
+      } cardData:\n${JSON.stringify(cardData, null, 2)}`
+    );
+
     // Run the dialog with the command and data from the action
-    const dialogResult = await ctx.runDialog("authRefresh", {
-      ...cardData,
-    });
+    const dialogResult: DialogTurnResult = await handlerContext.runDialog(
+      handlerContext.context,
+      OAuthDialog.name,
+      {
+        ...cardData,
+      }
+    );
 
     console.debug(
-      `[${AuthRefreshActionHandler.name}][DEBUG] [${
+      `[${AuthRefreshActionHandler.name}][DEBUG] ${
         this.run.name
-      }] dialogResult:\n${JSON.stringify(dialogResult, null, 2)}`
+      } dialogResult:\n${JSON.stringify(dialogResult, null, 2)}`
+    );
+
+    console.debug(
+      `[${AuthRefreshActionHandler.name}][TRACE] ${this.run.name}@end`
     );
   }
 }

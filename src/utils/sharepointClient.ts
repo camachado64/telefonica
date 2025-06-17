@@ -1,5 +1,6 @@
 import { BotConfiguration } from "../config/config";
-import { MicrosoftTokenResponse } from "./types";
+import { TokenResponse } from "./graphClient";
+import { HttpContentTypes, HttpHeaders, HttpMethods } from "./http";
 
 export interface SharepointClientOptions {
   username: string;
@@ -7,7 +8,7 @@ export interface SharepointClientOptions {
 }
 
 export interface SharepointClient {
-  health(): Promise<MicrosoftTokenResponse | Error>;
+  health(): Promise<TokenResponse>;
 }
 
 export class DefaultSharepointClient implements SharepointClient {
@@ -19,7 +20,7 @@ export class DefaultSharepointClient implements SharepointClient {
     private readonly _options: SharepointClientOptions
   ) {}
 
-  public async health(): Promise<MicrosoftTokenResponse | Error> {
+  public async health(): Promise<TokenResponse> {
     console.debug(
       `[${DefaultSharepointClient.name}][DEBUG] ${this.health.name}`
     );
@@ -31,11 +32,11 @@ export class DefaultSharepointClient implements SharepointClient {
   private async _getToken(
     config: BotConfiguration,
     options: SharepointClientOptions
-  ): Promise<MicrosoftTokenResponse | Error> {
+  ): Promise<TokenResponse> {
     return await fetch(`${config.authority}/oauth2/v2.0/token`, {
-      method: "POST",
+      method: HttpMethods.Post,
       headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
+        [HttpHeaders.ContentType]: HttpContentTypes.FormUrlEncoded
       },
       body: new URLSearchParams({
         grant_type: "password",
@@ -46,18 +47,16 @@ export class DefaultSharepointClient implements SharepointClient {
         password: options?.password,
       }),
     })
-      .then<MicrosoftTokenResponse>(
-        (response: Response): Promise<MicrosoftTokenResponse> => {
-          return response.json();
-        }
-      )
-      .then((response: MicrosoftTokenResponse): MicrosoftTokenResponse => {
+      .then<TokenResponse>((response: Response): Promise<TokenResponse> => {
+        return response.json();
+      })
+      .then((response: TokenResponse): TokenResponse => {
         return {
           ...response,
           started_at: new Date(),
         };
       })
-      .catch((error: Error): Error => {
+      .catch((error: any): never => {
         // Catches any errors that occur during the request
 
         console.error(

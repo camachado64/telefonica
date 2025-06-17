@@ -7,16 +7,19 @@ import {
   InvokeResponse,
   TeamsInfo,
   TeamsChannelAccount,
+  StatusCodes,
 } from "botbuilder";
 
-import { HandlerManager } from "../commands/handlerManager";
 import { BotConfiguration } from "../config/config";
-
+import { HandlerManager, OAuthAwareHandlerManager } from "../commands/manager";
+import { DialogManager } from "../dialogs/manager";
+// import { RunnableDialog } from "../dialogs/dialog";
+import { OAuthDialog } from "../dialogs/oauthDialog";
 import {
   AdaptiveCardAction,
   AdaptiveCardActionActivityValue,
 } from "../utils/actions";
-import { RunnableDialog } from "../dialogs/dialog";
+import { logError } from "../utils/logging";
 import { TechnicianRepository } from "../repositories/technicians";
 
 export class TeamsBot extends TeamsActivityHandler {
@@ -25,7 +28,8 @@ export class TeamsBot extends TeamsActivityHandler {
     private readonly _conversationState: ConversationState,
     private readonly _userState: UserState,
     private readonly _handlerManager: HandlerManager,
-    private readonly _dialog: RunnableDialog, // TODO: Map each dialog to a dialog name
+    private readonly _dialogManager: DialogManager,
+    // private readonly _dialog: RunnableDialog, // TODO: Map each dialog to a dialog name
     private readonly _techRepository: TechnicianRepository
   ) {
     super();
@@ -73,6 +77,9 @@ export class TeamsBot extends TeamsActivityHandler {
    */
   public async onInvokeActivity(context: TurnContext): Promise<InvokeResponse> {
     console.debug(
+      `[${TeamsBot.name}][DEBUG] ${this.onInvokeActivity.name}@start`
+    );
+    console.debug(
       `[${TeamsBot.name}][DEBUG] ${
         this.onInvokeActivity.name
       } activity:\n${JSON.stringify(context.activity, null, 2)}`
@@ -80,35 +87,33 @@ export class TeamsBot extends TeamsActivityHandler {
 
     if (context.activity.name === AdaptiveCardAction.Name) {
       // Extracts the action value from the activity when the activity has name 'adaptiveCard/action'
-      const activityValue: AdaptiveCardActionActivityValue =
-        context.activity.value;
+      const value: AdaptiveCardActionActivityValue = context.activity.value;
 
       console.debug(
         `[${TeamsBot.name}][DEBUG] ${
           this.onInvokeActivity.name
-        } activityValue:\n${JSON.stringify(activityValue, null, 2)}`
+        } context.activity.value:\n${JSON.stringify(value, null, 2)}`
       );
 
       // Resolves action handler from activity value and dispatches the action
       await this._handlerManager
-        .resolveAndDispatch(context, activityValue.action.verb)
-        .catch((error: Error) => {
-          // Catches any errors that occur during the command handling process
-
-          console.error(
-            `[${TeamsBot.name}][ERROR] ${
-              this.onInvokeActivity.name
-            } error:\n${JSON.stringify(error, null, 2)}`
-          );
-
-          // Unexpected errors are logged and the bot continues to run
-          return;
+        .resolveAndDispatch(context, value.action.verb, value.action.data)
+        .catch((error: any): void => {
+          logError(error, TeamsBot.name, this.onInvokeActivity.name);
         });
+
+      console.debug(
+        `[${TeamsBot.name}][DEBUG] ${this.onInvokeActivity.name}@end[ADAPTIVE_CARD_ACTION]`
+      );
 
       // Return an invoke response to indicate that the activity was handled and to prevent the Teams client from displaying an error message
       // due to the activity not being handled.
-      return { status: 200 };
+      return { status: StatusCodes.OK };
     }
+
+    console.debug(
+      `[${TeamsBot.name}][DEBUG] ${this.onInvokeActivity.name}@end`
+    );
 
     // Call super implementation for all other invoke activities.
     return await super.onInvokeActivity(context);
@@ -121,7 +126,7 @@ export class TeamsBot extends TeamsActivityHandler {
     context: TurnContext,
     query: SigninStateVerificationQuery
   ): Promise<void> {
-    await this._handleSignInAction(context, query);
+    return await this._handleSigninAction(context, query);
   }
 
   /**
@@ -131,26 +136,29 @@ export class TeamsBot extends TeamsActivityHandler {
     context: TurnContext,
     query: SigninStateVerificationQuery
   ): Promise<void> {
-    await this._handleSignInAction(context, query);
+    return await this._handleSigninAction(context, query);
   }
 
-  private async _handleSignInAction(
+  private async _handleSigninAction(
     context: TurnContext,
     query: SigninStateVerificationQuery
   ): Promise<void> {
     // This activity type can be triggered during the auth flow in either a 'signin/verifyState' or 'signin/tokenExchange' event
-
     console.debug(
-      `[${TeamsBot.name}][DEBUG] ${
-        this._handleSignInAction.name
-      } activity:\n${JSON.stringify(context.activity, null, 2)}`
+      `[${TeamsBot.name}][TRACE] ${this._handleSigninAction.name}@start`
     );
-
     console.debug(
       `[${TeamsBot.name}][DEBUG] ${
-        this._handleSignInAction.name
+        this._handleSigninAction.name
       } query:\n${JSON.stringify(query, null, 2)}`
     );
+
+    // Retrieves the oauth handler state from the handler manager using the 'replyToId' of the activity
+    // which should correspond to the auth flow login card sent by the bot, and would match a state containing
+    // the property 'oauthActivityId' set to the 'replyToId' of this activity.
+    const oauthHandlerState: any | null = (
+      this._handlerManager as OAuthAwareHandlerManager
+    ).oauthDialogState(context.activity?.replyToId);
 
     // Deletes the message corresponding to the auth flow card sent by the bot
     if (context.activity?.replyToId) {
@@ -164,32 +172,62 @@ export class TeamsBot extends TeamsActivityHandler {
       await context.sendActivity(
         "El usuario rechazó el flujo de autenticación."
       );
-      await this._dialog.stop(context);
+      await this._dialogManager
+        .stopDialog(context, OAuthDialog.name)
+        .catch((error: any): void => {
+          logError(error, TeamsBot.name, this._handleSigninAction.name);
+        });
     } else {
       // If the auth flow was completed, continues the dialog to run the next step
-      await this._dialog.continue(context);
+      await this._dialogManager
+        .continueDialog(context, OAuthDialog.name)
+        .catch((error: any): void => {
+          logError(error, TeamsBot.name, this._handleSigninAction.name);
+        });
+
+      if (oauthHandlerState) {
+        await this._handlerManager
+          .dispatch(oauthHandlerState.handler, context, null, {
+            sequenceId: oauthHandlerState.sequenceId,
+            commandMessage: oauthHandlerState.commandMessage,
+            commandMessageContext: oauthHandlerState.commandMessageContext,
+          })
+          .catch((error: any): void => {
+            logError(error, TeamsBot.name, this._handleSigninAction.name);
+          });
+      }
     }
+
+    console.debug(
+      `[${TeamsBot.name}][TRACE] ${this._handleSigninAction.name}@end`
+    );
   }
 
   private async _handleTokenResponse(
     context: TurnContext,
     next: () => Promise<void>
   ): Promise<void> {
-    // This activity type can be triggered during the auth flow
-
+    // This activity type can be triggered during the oauth flow
+    console.debug(
+      `[${TeamsBot.name}][TRACE] ${this._handleTokenResponse.name}@start`
+    );
     console.debug(
       `[${TeamsBot.name}][DEBUG] ${
         this._handleTokenResponse.name
       } activity:\n${JSON.stringify(context.activity, null, 2)}`
     );
 
-    // Deletes the message corresponding to the auth flow card sent by the bot
+    // Deletes the message corresponding to the oauth flow card sent by the bot
     if (context.activity?.replyToId) {
       await context.deleteActivity(context.activity.replyToId);
     }
 
     // Continues the dialog to run the next step
-    await this._dialog.continue(context);
+    await this._dialogManager.continueDialog(context, OAuthDialog.name);
+
+    console.debug(
+      `[${TeamsBot.name}][TRACE] ${this._handleTokenResponse.name}@end`
+    );
 
     // By calling next() you ensure that the next BotHandler is run.
     return await next();
@@ -199,6 +237,9 @@ export class TeamsBot extends TeamsActivityHandler {
     context: TurnContext,
     next: () => Promise<void>
   ): Promise<void> {
+    console.debug(
+      `[${TeamsBot.name}][TRACE] ${this._handleMessage.name}@start`
+    );
     console.debug(
       `[${TeamsBot.name}][DEBUG] ${
         this._handleMessage.name
@@ -214,6 +255,21 @@ export class TeamsBot extends TeamsActivityHandler {
     if (removedMentionText) {
       // Remove any line breaks as well as leading and trailing white spaces
       text = removedMentionText.toLowerCase().replace(/\n|\r/g, "").trim();
+    }
+
+    if (!text || text.length === 0) {
+      // If the text is empty, check if activity value is present and contains an 'action.verb'
+      console.warn(
+        `[${TeamsBot.name}][WARN] ${this._handleMessage.name} Empty message text`
+      );
+
+      if (context.activity.value?.action) {
+        // If the activity value contains an action, delegate the handling to the 'onInvokeActivity' method
+        // Set the activity name to 'adaptiveCard/action' to trigger the onInvokeActivity method
+        context.activity.name = AdaptiveCardAction.Name;
+        await this.onInvokeActivity(context);
+        return;
+      }
     }
 
     console.debug(
@@ -237,33 +293,30 @@ export class TeamsBot extends TeamsActivityHandler {
       return;
     }
 
-    // Checks if the caller is a technician
-    const technician = await this._techRepository.technicianByEmail(
-      fromInfo.email
-    );
-    if (!this.config.allowAll && !technician) {
-      // If the caller is not a technician, log a warning and return as the caller is not authorized to use the bot
-      console.warn(
-        `[${TeamsBot.name}][WARN] ${this._handleMessage.name} Caller is not a technician`
+    if (!this.config.allowAll) {
+      // If the bot is not configured to allow all users, check if the caller is a technician
+      const technician = await this._techRepository.technicianByEmail(
+        fromInfo.email
       );
-      return;
+      if (!technician) {
+        // If the caller is not a technician, log a warning and return as the caller is not authorized to use the bot
+        console.warn(
+          `[${TeamsBot.name}][WARN] ${this._handleMessage.name} Caller is not a technician`
+        );
+
+        // By calling next() you ensure that the next BotHandler is run.
+        return await next();
+      }
     }
 
     // Resolves command handler from text and dispatches the command
     await this._handlerManager
       .resolveAndDispatch(context, text)
-      .catch((error: Error): Promise<void> => {
-        // Catches any errors that occur during the command handling process
-
-        console.error(
-          `[${TeamsBot.name}][ERROR] ${
-            this._handleMessage.name
-          } error:\n${JSON.stringify(error, null, 2)}`
-        );
-
-        // Unexpected errors are logged and the bot continues to run
-        return;
+      .catch((error: any): void => {
+        logError(error, TeamsBot.name, this._handleMessage.name);
       });
+
+    console.debug(`[${TeamsBot.name}][TRACE] ${this._handleMessage.name}@end`);
 
     // By calling next() you ensure that the next BotHandler is run.
     return await next();

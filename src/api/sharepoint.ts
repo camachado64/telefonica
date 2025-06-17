@@ -1,7 +1,7 @@
 import { Router, Response, Request, NextFunction } from "express";
 
 import { sharepointClient } from "../config/sharepoint";
-import { MicrosoftTokenResponse } from "../utils/types";
+import { TokenResponse } from "../utils/graphClient";
 
 export const router = Router();
 
@@ -20,7 +20,7 @@ router.get(
     // Attempt to connect to the Graph API using the graphClient instance with a me request
     await sharepointClient
       .health()
-      .then((response: MicrosoftTokenResponse): void => {
+      .then((response: TokenResponse): void => {
         // Return a 200 status code to indicate that the API is running
         res
           .status(200)
@@ -28,7 +28,7 @@ router.get(
             JSON.stringify({ status: 200, data: { token: response } }, null, 2)
           );
       })
-      .catch((error: Error) => {
+      .catch((error: any) => {
         // Catches any errors that occur during the connection check
 
         console.error(
@@ -44,7 +44,13 @@ router.get(
           .status(503)
           .send(
             JSON.stringify(
-              { status: 503, data: { message: "API connection failed" } },
+              {
+                status: 503,
+                data: {
+                  message: "API connection failed",
+                  error: error?.message ?? error,
+                },
+              },
               null,
               2
             )
