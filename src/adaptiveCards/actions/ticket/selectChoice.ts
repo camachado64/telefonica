@@ -203,23 +203,56 @@ export class TicketAdaptiveCardSelectChoiceActionHandler
     );
 
     const customFieldValue: string = activityValue[customFieldId];
-    const customField = state.ticket.customFields[customFieldId];
+    const customFieldState = state.ticket.customFields[customFieldId];
 
     if (!customFieldValue) {
+      // If customFieldValue is empty but customField.value is defined, it means the user wants to reset the field
+      // If both are empty, we can just return
+      if (!customFieldState?.value) {
+        console.debug(
+          `[${TicketAdaptiveCardSelectChoiceActionHandler.name}][TRACE] ${this._selectCustomFieldChoice.name}@end[NO_VALUE]`
+        );
+        return;
+      }
+
+      const customFieldsJson = state.page1.body[4].items;
+      for (const customFieldJson of customFieldsJson) {
+        const keyJson: string = customFieldJson.items[0].id;
+
+        if (keyJson === customFieldId) {
+          console.debug(
+            `[${TicketAdaptiveCardSelectChoiceActionHandler.name}][DEBUG] ${this._selectCustomFieldChoice.name} Resetting field: ${keyJson}`
+          );
+
+          customFieldState.value = "";
+
+          if (customFieldJson.items[1].items) {
+            customFieldJson.items[1].items[0].type = "Input.ChoiceSet";
+            customFieldJson.items[1].items[0].text = "";
+            customFieldJson.items[1].items[0].value = "";
+            customFieldJson.items[1].items[0].choices =
+              customFieldState.choices;
+            customFieldJson.items[1].items[0].isRequired = true;
+          }
+        }
+      }
+
+      await this._resetField(state, customFieldId, null);
+
       console.debug(
-        `[${TicketAdaptiveCardSelectChoiceActionHandler.name}][TRACE] ${this._selectCustomFieldChoice.name}@end[NO_VALUE]`
+        `[${TicketAdaptiveCardSelectChoiceActionHandler.name}][TRACE] ${this._selectCustomFieldChoice.name}@end[FIELD_RESET]`
       );
 
       return;
     }
 
-    if (!customField) {
+    if (!customFieldState) {
       throw new Error(
         `Custom field with id ${customFieldId} not found in the ticket state.`
       );
     }
 
-    if (customField.value === customFieldValue) {
+    if (customFieldState.value === customFieldValue) {
       console.debug(
         `[${TicketAdaptiveCardSelectChoiceActionHandler.name}][TRACE] ${this._selectCustomFieldChoice.name}@end[NO_CHANGE]`
       );
@@ -227,39 +260,47 @@ export class TicketAdaptiveCardSelectChoiceActionHandler
       return;
     }
 
-    const customFieldsItems = state.page1.body[4].items;
-    for (const item of customFieldsItems) {
-      const key = item.items[0].id;
-      const field = state.ticket.customFields[key];
+    const customFieldsJson = state.page1.body[4].items;
+    for (const customFieldJson of customFieldsJson) {
+      const keyJson: string = customFieldJson.items[0].id;
+      const currentFieldState: any = state.ticket.customFields[keyJson];
 
       // Update the field value in the state with the "auto" inputs returned by the adaptive card
-      field.value = activityValue[key];
+      if (keyJson in activityValue) {
+        currentFieldState.value = activityValue[keyJson] || "";
+      }
 
       // Update the field value in the card
-      if (field.type === "Select") {
-        item.items[1].items[0].value = field.value;
-      } else {
-        item.items[1].value = field.value;
-      }
-    }
+      // if (customFieldState.type === "Select") {
+      //   customFieldJson.items[1].items[0].value = customFieldState.value;
+      // } else {
+      //   customFieldJson.items[1].value = customFieldState.value;
+      // }
 
-    customField.value = customFieldValue;
-
-    const customFields = state.page1.body[4].items;
-    for (const item of customFields) {
-      if (item.items[0].id === String(customField.id)) {
+      if (keyJson === customFieldId) {
         console.debug(
-          `[${TicketAdaptiveCardSelectChoiceActionHandler.name}][DEBUG] ${this._selectCustomFieldChoice.name} Updating field: ${item.items[0].id}`
+          `[${TicketAdaptiveCardSelectChoiceActionHandler.name}][DEBUG] ${this._selectCustomFieldChoice.name} Updating field: ${keyJson}`
         );
 
-        item.items[1].items[0].value = customFieldValue;
-        item.items[1].items[0].isRequired = true;
-        item.items[1].items[0].type = "TextBlock";
-        item.items[1].items[0].text = customFieldValue;
+        console.debug(
+          `[${TicketAdaptiveCardSelectChoiceActionHandler.name}][DEBUG] ${this._selectCustomFieldChoice.name} customFieldValue:\n`,
+          customFieldJson
+        );
 
-        break;
+        if (customFieldJson.items[1].items) {
+          // item.items[1].items[0].type = "TextBlock";
+          // item.items[1].items[0].text = customFieldValue;
+          // item.items[1].items[0].value = customFieldValue;
+          // item.items[1].items[0].isRequired = true;
+          customFieldJson.items[1].items[0].type = "TextBlock";
+          customFieldJson.items[1].items[0].text = currentFieldState.value;
+          customFieldJson.items[1].items[0].value = currentFieldState.value;
+          customFieldJson.items[1].items[0].isRequired = true;
+        }
       }
     }
+
+    // customFieldState.value = customFieldValue;
 
     console.debug(
       `[${TicketAdaptiveCardSelectChoiceActionHandler.name}][DEBUG] ${
@@ -290,21 +331,21 @@ export class TicketAdaptiveCardSelectChoiceActionHandler
     // Once a field value changes all other fields that are 'basedOn' this field
     // should be reset to empty string and its choices should be recalculated
     for (const key of Object.keys(state.ticket.customFields)) {
-      const field = state.ticket.customFields[key];
+      const customFieldState = state.ticket.customFields[key];
 
       console.debug(
-        `[${TicketAdaptiveCardSelectChoiceActionHandler.name}][DEBUG] ${this._resetField.name} field.id: ${field.id}, field.basedOn: ${field.basedOn}`
+        `[${TicketAdaptiveCardSelectChoiceActionHandler.name}][DEBUG] ${this._resetField.name} field.id: ${customFieldState.id}, field.basedOn: ${customFieldState.basedOn}`
       );
 
-      if (field.basedOn === customFieldId) {
+      if (customFieldState.basedOn === customFieldId) {
         console.debug(
-          `[${TicketAdaptiveCardSelectChoiceActionHandler.name}][DEBUG] ${this._resetField.name} Resetting field: ${field.id}`
+          `[${TicketAdaptiveCardSelectChoiceActionHandler.name}][DEBUG] ${this._resetField.name} Resetting field: ${customFieldState.id}`
         );
 
         let choices: { title: string; value: string }[] = [];
         if (customFieldValue) {
           choices = await this._apiClient
-            .customFieldValues(field.id, customFieldValue)
+            .customFieldValues(customFieldState.id, customFieldValue)
             .then((response: CustomFieldValue[]) => {
               return response.map((value: CustomFieldValue) => {
                 return { title: value.Name, value: value.Name };
@@ -318,26 +359,30 @@ export class TicketAdaptiveCardSelectChoiceActionHandler
           } choices: ${JSON.stringify(choices, null, 2)}`
         );
 
-        field.value = "";
-        field.choices = choices;
+        customFieldState.value = "";
+        customFieldState.choices = choices;
 
-        const customFields = state.page1.body[4].items;
-        for (const item of customFields) {
-          if (item.items[0].id === String(field.id)) {
+        const customFieldsJson = state.page1.body[4].items;
+        for (const customFieldJson of customFieldsJson) {
+          const keyJson: string = customFieldJson.items[0].id;
+
+          if (keyJson === String(customFieldState.id)) {
             console.debug(
-              `[${TicketAdaptiveCardSelectChoiceActionHandler.name}][DEBUG] ${this._resetField.name} Updating field: ${item.items[0].id}`
+              `[${TicketAdaptiveCardSelectChoiceActionHandler.name}][DEBUG] ${this._resetField.name} Updating field: ${keyJson}`
             );
 
-            item.items[1].items[0].type = "Input.ChoiceSet";
-            item.items[1].items[0].choices = choices;
-            item.items[1].items[0].value = "";
-            item.items[1].items[0].isRequired = false;
-            item.items[1].selectAction.isEnabled = choices.length > 0;
+            customFieldJson.items[1].items[0].type = "Input.ChoiceSet";
+            customFieldJson.items[1].items[0].choices = choices;
+            customFieldJson.items[1].items[0].value = "";
+            customFieldJson.items[1].items[0].text = "";
+            customFieldJson.items[1].items[0].isRequired = false;
+            customFieldJson.items[1].selectAction.isEnabled =
+              choices.length > 0;
             break;
           }
         }
 
-        this._resetField(state, String(field.id), null);
+        this._resetField(state, String(customFieldState.id), null);
       }
     }
 
