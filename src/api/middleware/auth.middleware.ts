@@ -30,7 +30,7 @@ export async function authMiddleware(
   res: Response,
   next: NextFunction
 ): Promise<void> {
-  if (req.url.includes("/api/token") || req.url.includes("/api/messages")) {
+  if (req.url.includes("/api/token") || req.url.includes("/api/messages") || req.url.includes("health")) {
     // Skip authentication for the /token endpoint
     console.debug(
       `[authenticationMiddleware] [${req.method} ${req.url}] [DEBUG] Skipping authentication for '${req.url}' endpoint`
