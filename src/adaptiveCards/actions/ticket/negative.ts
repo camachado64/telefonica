@@ -7,16 +7,13 @@ import {
 } from "../../../commands/manager";
 import { ActionHandler } from "../../../commands/handler";
 import { HandlerTurnContext } from "../../../commands/context";
-import {
-  AdaptiveCardActionActivityValue,
-  AdaptiveCardTicketCardDataPageGUI,
-} from "../../../utils/actions";
+import { AdaptiveCardActionActivityValue } from "../../../utils/actions";
 import {
   MicrosoftGraphClient,
   TeamChannelMessage,
 } from "../../../utils/graphClient";
 
-export class TicketAdaptiveCardCancelActionHandler implements ActionHandler {
+export class TicketAdaptiveCardNegativeActionHandler implements ActionHandler {
   public pattern: TriggerPatterns = "negativeTicket";
 
   constructor(private readonly _graphClient: MicrosoftGraphClient) {}
@@ -27,7 +24,7 @@ export class TicketAdaptiveCardCancelActionHandler implements ActionHandler {
     handlerMessageContext: HandlerMessageContext
   ): Promise<any> {
     console.debug(
-      `[${TicketAdaptiveCardCancelActionHandler.name}][TRACE] ${this.run.name}@start`
+      `[${TicketAdaptiveCardNegativeActionHandler.name}][TRACE] ${this.run.name}@start`
     );
 
     // Get the data from the action and update the card GUI properties to reflect the state of the ticket creation
@@ -74,7 +71,7 @@ export class TicketAdaptiveCardCancelActionHandler implements ActionHandler {
     );
 
     console.debug(
-      `[${TicketAdaptiveCardCancelActionHandler.name}][TRACE] ${this.run.name}@end`
+      `[${TicketAdaptiveCardNegativeActionHandler.name}][TRACE] ${this.run.name}@end`
     );
   }
 }

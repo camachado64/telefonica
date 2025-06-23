@@ -45,7 +45,7 @@ export type AdaptiveCardTicketCardDataPageGUI = {
       tooltip: string;
       enabled: boolean;
     };
-    cancel: { 
+    cancel: {
       title: string;
       tooltip: string;
       enabled: boolean;
@@ -67,7 +67,6 @@ export type AdaptiveCardTicketCardPageData = {
 
 export type AdaptiveCardActionPositiveTicketPageData = {
   sequenceId: string;
-  gui: AdaptiveCardTicketCardDataPageGUI;
   ticketStateChoiceSet?: string;
   ticketCategoryChoiceSet?: string;
   ticketDescriptionInput?: string;

@@ -2,8 +2,8 @@
 
 import { config as dotEnv } from "dotenv";
 
-console.debug(`[config][DEBUG] Loading configuration...`);
-console.debug(`[config][DEBUG] currentWorkingDir: ${process.cwd()}`);
+console.debug(`Loading configuration...`);
+console.debug(`currentWorkingDir:`, process.cwd());
 
 // Load environment variables from .env file.
 // This only applies when running the application through 'npm run start' in a local environment as
@@ -20,6 +20,12 @@ dotEnv({
 //   cert: Buffer;
 // }
 
+export interface JWTOptions {
+  secret: string;
+  rootUsername: string;
+  rootPassword: string;
+}
+
 export interface BotConfiguration {
   botId: string;
   botPassword: string;
@@ -32,6 +38,7 @@ export interface BotConfiguration {
   clientSecret: string;
   authority: string;
   authorityHost: string;
+  scopes: string[];
 
   teamsAppId: string;
   teamsAppCatalogId: string;
@@ -53,6 +60,8 @@ export interface BotConfiguration {
   allowAll: string;
 
   // ssl: SSLCert;
+
+  jwt: JWTOptions;
 }
 
 export const config: BotConfiguration = {
@@ -69,6 +78,11 @@ export const config: BotConfiguration = {
   clientSecret: process.env.AAD_APP_CLIENT_SECRET,
   authority: process.env.AAD_APP_OAUTH_AUTHORITY,
   authorityHost: process.env.AAD_APP_OAUTH_AUTHORITY_HOST,
+  scopes: process.env.AAD_APP_SCOPES
+    ? process.env.AAD_APP_SCOPES.split(",").map((scope: string): string =>
+        scope.trim()
+      )
+    : [],
 
   // Teams app settings
   teamsAppId: process.env.TEAMS_APP_ID,
@@ -99,24 +113,61 @@ export const config: BotConfiguration = {
   //   key: readFileSync(process.env.SSL_KEY),
   //   cert: readFileSync(process.env.SSL_CERT),
   // },
+
+  // JWT settings
+  jwt: {
+    secret: process.env.JWT_SECRET,
+    rootUsername: process.env.JWT_ROOT_USERNAME,
+    rootPassword: process.env.JWT_ROOT_PASSWORD,
+  },
+};
+
+const recursiveMask = (obj: any, mask: any): any => {
+  if (typeof obj !== "object" || Array.isArray(obj)) {
+    // Return non-object values as is
+    return obj;
+  }
+
+  for (const key of Object.keys(obj)) {
+    if (
+      key.toLowerCase().includes("password") ||
+      key.toLowerCase().includes("secret")
+    ) {
+      // Skip sensitive keys
+      continue;
+    }
+
+    if (typeof obj[key] === "object") {
+      // Recursively mask nested objects
+      mask[key] = recursiveMask(obj[key], {});
+    } else {
+      mask[key] = obj[key];
+    }
+  }
+
+  return mask;
 };
 
 // Create a safe version of the config object to avoid logging sensitive information
 // like passwords or secrets
 const safeConfig: Partial<BotConfiguration> = {};
-const configKeys: (keyof BotConfiguration)[] = Object.keys(
-  config
-) as (keyof BotConfiguration)[];
-configKeys.forEach((key: keyof BotConfiguration) => {
-  if (
-    key.toLowerCase().indexOf("password") < 0 &&
-    key.toLowerCase().indexOf("secret") < 0
-  ) {
-    // This is to avoid logging sensitive information like passwords or secrets
-    const safeKey = key as string;
-    safeConfig[safeKey] = config[key];
-  }
-});
-console.debug(
-  `[config][DEBUG] config:\n${JSON.stringify(safeConfig, null, 2)}`
-);
+// const configKeys: (keyof BotConfiguration)[] = Object.keys(
+//   config
+// ) as (keyof BotConfiguration)[];
+// configKeys.forEach((key: keyof BotConfiguration) => {
+//   recursiveMask(config[key], safeConfig);
+//   // if (
+//   //   key.toLowerCase().indexOf("password") < 0 &&
+//   //   key.toLowerCase().indexOf("secret") < 0
+//   // ) {
+//   //   // This is to avoid logging sensitive information like passwords or secrets
+//   //   const safeKey = key as string;
+//   //   safeConfig[safeKey] = config[key];
+//   // }
+
+//   // if (typeof config[key] === "object") {
+//   //   // Recursively handle nested objects
+//   // }
+// });
+recursiveMask(config, safeConfig);
+console.debug(`config:${safeConfig ? "\n" : `${safeConfig}`}`, safeConfig);

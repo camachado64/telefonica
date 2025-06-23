@@ -35,12 +35,16 @@ export class TicketCommandHandler extends CommandHandler {
     );
 
     await handlerContext.switchToPersonalConversationAsync(
-      async (wrapper: HandlerTurnContext): Promise<void> => {
+      async (handlerContext: HandlerTurnContext): Promise<void> => {
         console.debug(
           `[${TicketCommandHandler.name}][TRACE] ${this.run.name} handlerContext.switchToPersonalConversationAsync <anonymous>(wrapper: HandlerTurnContext) => Promise<void>@start`
         );
 
-        await this._doRun(wrapper, commandMessage, commandMessageContext); //, token);
+        await this._doRun(
+          handlerContext,
+          commandMessage,
+          commandMessageContext
+        ); //, token);
 
         console.debug(
           `[${TicketCommandHandler.name}][TRACE] ${this.run.name} handlerContext.switchToPersonalConversationAsync <anonymous>(wrapper: HandlerTurnContext) => Promise<void>@end`
@@ -94,7 +98,7 @@ export class TicketCommandHandler extends CommandHandler {
       ticketCategoryChoiceSet: {
         value: "",
         choices: queueChoices,
-        required: false
+        // required: false
       },
       ticketDescriptionInput: {
         value: "",
@@ -112,37 +116,40 @@ export class TicketCommandHandler extends CommandHandler {
       second: "2-digit",
     });
 
+    // Initializes the 'state.gui' object with the initial values for the adaptive card GUI state
+    state.gui = {
+      page: 0,
+      header: {
+        startedAt: startedAt,
+        from: {
+          name: data?.replyFrom?.name ?? " ",
+          email: data?.replyFrom?.email ?? " ",
+        },
+      },
+      context: {
+        team: data?.team?.name ?? " ",
+        channel: data?.channel?.displayName ?? " ",
+        conversation: data?.thread?.subject ?? " ",
+      },
+      buttons: {
+        visible: true,
+        create: {
+          title: "Seguiente",
+          tooltip: "Seguir con la creación de la incidencia",
+          enabled: true,
+        },
+        cancel: {
+          title: "Cancelar",
+          tooltip: "Cancela la creación de la incidencia",
+          enabled: true,
+        },
+      },
+    };
+
     const cardData: AdaptiveCardTicketCardPageData = {
       sequenceId: state.sequenceId,
       ticket: state.ticket,
-      gui: {
-        page: 0,
-        header: {
-          startedAt: startedAt,
-          from: {
-            name: data?.replyFrom?.name ?? " ",
-            email: data?.replyFrom?.email ?? " ",
-          },
-        },
-        context: {
-          team: data?.team?.name ?? " ",
-          channel: data?.channel?.displayName ?? " ",
-          conversation: data?.thread?.subject ?? " ",
-        },
-        buttons: {
-          visible: true,
-          create: {
-            title: "Seguiente", // "Crear Incidencia",
-            tooltip: "Seguir con la creación de la incidencia",
-            enabled: false,
-          },
-          cancel: {
-            title: "Cancelar",
-            tooltip: "Cancela la creación de la incidencia",
-            enabled: true,
-          },
-        },
-      },
+      gui: state.gui,
     };
 
     // Expands the adaptive card template with the data provided

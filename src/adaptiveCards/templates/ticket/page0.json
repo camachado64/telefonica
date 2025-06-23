@@ -170,22 +170,6 @@
                         },
                         {
                             "type": "Container",
-                            "selectAction": {
-                                "id": "ticketStateChoiceSetSelect",
-                                "type": "Action.Submit",
-                                "isEnabled": true,
-                                "associatedInputs": "auto",
-                                "data": {
-                                    "action": {
-                                        "verb": "selectChoiceTicket",
-                                        "data": {
-                                            "choice": "ticketStateChoiceSet",
-                                            "sequenceId": "${sequenceId}",
-                                            "gui": "${gui}"
-                                        }
-                                    }
-                                }
-                            },
                             "items": [
                                 {
                                     "type": "Input.ChoiceSet",
@@ -212,29 +196,13 @@
                         },
                         {
                             "type": "Container",
-                            "selectAction": {
-                                "id": "ticketCategoryChoiceSetSelect",
-                                "type": "Action.Submit",
-                                "isEnabled": true,
-                                "associatedInputs": "auto",
-                                "data": {
-                                    "action": {
-                                        "verb": "selectChoiceTicket",
-                                        "data": {
-                                            "choice": "ticketCategoryChoiceSet",
-                                            "sequenceId": "${sequenceId}",
-                                            "gui": "${gui}"
-                                        }
-                                    }
-                                }
-                            },
                             "items": [
                                 {
                                     "type": "Input.ChoiceSet",
                                     "id": "ticketCategoryChoiceSet",
                                     "placeholder": "Cola de la incidencia",
                                     "style": "compact",
-                                    "isRequired": "${ticket.ticketCategoryChoiceSet.required}",
+                                    "isRequired": true,
                                     "isMultiSelect": false,
                                     "value": "${ticket.ticketCategoryChoiceSet.value}",
                                     "choices": "${ticket.ticketCategoryChoiceSet.choices}"
@@ -283,8 +251,7 @@
                             "verb": "positiveTicket",
                             "isEnabled": "${gui.buttons.create.enabled}",
                             "data": {
-                                "sequenceId": "${sequenceId}",
-                                "gui": "${gui}"
+                                "sequenceId": "${sequenceId}"
                             }
                         },
                         {
@@ -297,8 +264,7 @@
                             "tooltip": "${gui.buttons.cancel.tooltip}",
                             "style": "destructive",
                             "data": {
-                                "sequenceId": "${sequenceId}",
-                                "gui": "${gui}"
+                                "sequenceId": "${sequenceId}"
                             }
                         }
                     ]

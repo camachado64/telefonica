@@ -1,7 +1,67 @@
-// Overrides the 'console.debug' and  method to add a timestamp to the debug messages
-console.debug = (message: string, ...optionalParams: any[]): void => {
-  console.log(`[${new Date().toISOString()}]${message}`, ...optionalParams);
-};
+// Imports util to set the default depth for object inspection when logging
+import * as util from "util";
+util.inspect.defaultOptions.depth = null;
+
+// function formatLogMessage(level: string, message: string): string {
+//   const prepareStackTrace = Error.prepareStackTrace;
+//   Error.prepareStackTrace = (_, stack) => stack;
+//   const err = new Error();
+//   const callSite = err.stack[2] as unknown as NodeJS.CallSite;
+
+//   // for (const stackFrame of err.stack) {
+//   //   const callSite = stackFrame as unknown as NodeJS.CallSite;
+//   //   console.log(
+//   //     `[${new Date().toISOString()}][DEBUG] [${callSite.getFileName()}:${callSite.getLineNumber()}] [${
+//   //       callSite.getTypeName() || "Global"
+//   //     }.${
+//   //       callSite.getMethodName() || callSite.getFunctionName() || "<anonymous>"
+//   //     }]`
+//   //   );
+//   // }
+
+//   const callerLine = callSite.getLineNumber();
+//   const callerFile = callSite.getFileName();
+
+//   const typeName = callSite.getTypeName() || "<Global>";
+//   const methodName =
+//     callSite.getMethodName() || callSite.getFunctionName() || "<anonymous>";
+
+//   Error.prepareStackTrace = prepareStackTrace;
+
+//   return `[${new Date().toISOString()}] [${level}] [${callerFile}:${callerLine}] [${typeName}.${methodName}] ${
+//     message ? `- ${message}` : ""
+//   }`;
+// }
+
+// // Overrides the 'console.debug' and  method to add a timestamp to the debug messages
+// console.debug = (message: string, ...optionalParams: any[]): void => {
+//   // Log the debug message to the console
+//   console.log(formatLogMessage("DEBUG", message), ...optionalParams);
+// };
+// console.info = (message: string, ...optionalParams: any[]): void => {
+//   // Log the info message to the console
+//   console.log(formatLogMessage("INFO", message), ...optionalParams);
+// };
+// console.warn = (message: string, ...optionalParams: any[]): void => {
+//   // Log the warning message to the console
+//   console.log(formatLogMessage("WARN", message), ...optionalParams);
+// };
+// // console.error is overridden to add a timestamp and the stack trace of the error
+// console.error = (error: any, ...optionalParams: any[]): void => {
+//   // Check if the error is an instance of Error, if not, convert it to a string
+//   const message = error instanceof Error ? error.message : "";
+//   console.log(formatLogMessage("ERROR", message));
+//   // Log the stack trace of the error
+//   if (optionalParams.length > 0 && optionalParams[0] instanceof Error) {
+//     console.log(
+//       formatLogMessage("ERROR", null),
+//       optionalParams[0].stack || "No stack trace available"
+//     );
+//   }
+// };
+
+// Initializes the logging setup for the application
+import * as _ from "./utils/logging";
 
 import {
   ConversationState,
@@ -10,11 +70,14 @@ import {
   UserState,
 } from "botbuilder";
 import express, { Response, Request, Router } from "express";
+import { Server } from "http";
 // import https, { ServerOptions } from "https";
 
 import "isomorphic-fetch";
 // import path from "path";
 // import send from "send";
+
+import { authMiddleware } from "./api/middleware/auth.middleware";
 
 import { TeamsBot } from "./bots/teamsBot";
 import { HandlerManager, OAuthAwareHandlerManager } from "./commands/manager";
@@ -29,7 +92,7 @@ import { OAuthDialog } from "./dialogs/oauthDialog";
 import { TicketCommandHandler } from "./commands/ticket/ticket";
 import { AuthRefreshActionHandler } from "./adaptiveCards/actions/authRefresh/authRefresh";
 import { TicketAdaptiveCardPositiveActionHandler } from "./adaptiveCards/actions/ticket/positive";
-import { TicketAdaptiveCardCancelActionHandler } from "./adaptiveCards/actions/ticket/negative";
+import { TicketAdaptiveCardNegativeActionHandler } from "./adaptiveCards/actions/ticket/negative";
 import { TicketAdaptiveCardSelectChoiceActionHandler } from "./adaptiveCards/actions/ticket/selectChoice";
 
 import { commandBot } from "./config/initialize";
@@ -44,7 +107,8 @@ import { router as ticketRouter } from "./api/ticket";
 import { router as graphRouter } from "./api/graph";
 import { router as sharepointRouter } from "./api/sharepoint";
 import { router as dbRouter } from "./api/db";
-
+import { router as authRouter } from "./api/token";
+import { logError } from "./utils/logging";
 
 // Define the state store for your bot.
 // See https://aka.ms/about-bot-state to learn more about using MemoryStorage.
@@ -82,7 +146,7 @@ const handlerManager: HandlerManager = new OAuthAwareHandlerManager(
         graphClient,
         logsRepository
       ),
-      new TicketAdaptiveCardCancelActionHandler(graphClient),
+      new TicketAdaptiveCardNegativeActionHandler(graphClient),
       new TicketAdaptiveCardSelectChoiceActionHandler(apiClient),
     ],
   }
@@ -109,12 +173,14 @@ const bot: TeamsBot = new TeamsBot(
 );
 
 // Create express application.
-const app = express();
+const app: express.Express = express();
 app.use(express.json());
+app.use(authMiddleware);
 
 // Add an API router to the express app and mount the API routes
 const apiRouter: Router = Router();
 app.use("/api", apiRouter);
+apiRouter.use("/token", authRouter);
 apiRouter.use("/db", dbRouter);
 apiRouter.use("/ticket", ticketRouter);
 apiRouter.use("/graph", graphRouter);
@@ -128,14 +194,11 @@ apiRouter.use("/logs", apiLogs);
 //   cert: config.ssl.cert,
 // };
 
-// Create the server and listen on the specified port or default to 3978 if not specified
-const server =
+// Create the server and listen on the specified port or default to 3978 if not specified\
+const server: Server =
   // https.createServer(options, app)
-  app.listen(process.env.port || process.env.PORT || 3978, () => {
-    console.log(
-      `[expressApp][INFO] Bot started, ${app.name} listening to`,
-      server.address()
-    );
+  app.listen(process.env.port || process.env.PORT || 3978, (): void => {
+    console.info(`Bot started, '${app.name}' listening to`, server.address());
   });
 
 // Register an API endpoint with `express`. Teams sends messages to your application
@@ -151,24 +214,16 @@ apiRouter.post(
     await commandBot
       .requestHandler(req, res, async (context: TurnContext): Promise<any> => {
         console.debug(
-          `[${req.method} ${req.url}][DEBUG] req.headers:\n${JSON.stringify(
-            req.headers,
-            null,
-            2
-          )}`
+          `[${req.method} ${req.url}][DEBUG] req.headers:${
+            req.headers ? "\n" : " "
+          }`,
+          req.headers
         );
         return await bot.run(context);
       })
       .catch((err: any) => {
-        // Catches any errors that occur during the request
-
-        console.error(
-          `[${req.method} ${req.url}][ERROR] error:\n${JSON.stringify(
-            err,
-            null,
-            2
-          )}`
-        );
+        // Catches any errors that occur during the request and logs them
+        logError(err, "Express", `${req.method} ${req.url}`);
 
         if (!err.message.includes("412")) {
           // Error message including "412" means it is waiting for user's consent, which is a normal process of SSO, shouldn't throw this error
@@ -181,11 +236,10 @@ apiRouter.post(
 // Health check endpoint for the express app to verify that the app is running
 apiRouter.get("/health", async (req: Request, res: Response): Promise<void> => {
   console.debug(
-    `[${req.method} ${req.url}][DEBUG] req.headers:\n${JSON.stringify(
-      req.headers,
-      null,
-      2
-    )}`
+    `[${req.method} ${req.url}][DEBUG] req.headers:\n${
+      req.headers ? "\n" : "undefined"
+    }`,
+    req.headers
   );
 
   // Return a 200 status code to indicate that the bot is running

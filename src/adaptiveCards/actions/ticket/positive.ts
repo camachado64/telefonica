@@ -1,5 +1,5 @@
 import { CardFactory, MessageFactory } from "botbuilder";
-import { TriggerPatterns } from "@microsoft/teamsfx";
+import { ErrorCode, ErrorWithCode, TriggerPatterns } from "@microsoft/teamsfx";
 
 import * as ACData from "adaptivecards-templating";
 
@@ -61,10 +61,20 @@ export class TicketAdaptiveCardPositiveActionHandler implements ActionHandler {
     // Validate that we can retrieve the state
     const state: HandlerState = handlerContext.state;
     if (!state) {
-      throw new Error("Ticket adaptive card state is not initialized.");
+      throw new ErrorWithCode(
+        "Ticket adaptive card state has not yet been initialized",
+        ErrorCode.FailedOperation
+      );
     }
 
-    if (actionData.gui.page === 0) {
+    if (state.gui.page === 0) {
+      // If the state is on page 0, we need to update the 'state.ticket' object with the data from the action
+      for (const [key, field] of Object.entries<any>(state.ticket)) {
+        if (key in actionData) {
+          field.value = actionData[key];
+        }
+      }
+
       const customFields: any[] = await this._constructCustomFields(
         state,
         actionData
@@ -86,36 +96,25 @@ export class TicketAdaptiveCardPositiveActionHandler implements ActionHandler {
         )}`
       );
 
+      // Update the state GUI properties to reflect the state of the ticket creation
+      state.gui.page = 1;
+      state.gui.buttons.create.enabled = false;
+      state.gui.buttons.create.title = "Crear Incidencia";
+      state.gui.buttons.create.tooltip = "Crea una nueva incidencia";
+
+      // Prepare the card data for the adaptive card
       const cardData: AdaptiveCardTicketCardPageData = {
         sequenceId: state.sequenceId,
-        gui: {
-          ...actionData.gui,
-          page: 1,
-          buttons: {
-            ...actionData.gui.buttons,
-            create: {
-              ...actionData.gui.buttons.create,
-              title: "Crear Incidencia",
-              tooltip: "Crea una nueva incidencia",
-              enabled: false,
-            },
-          },
-        },
+        gui: state.gui,
       };
-      state.gui = cardData.gui;
 
       // Expands the adaptive card template with the data provided
       const cardJson = new ACData.Template(page1).expand({
         $root: cardData,
       });
 
-      // console.debug(
-      //   `[${TicketAdaptiveCardPositiveActionHandler.name}][DEBUG] ${
-      //     this.run.name
-      //   } cardJson:\n${JSON.stringify(cardJson, null, 2)}`
-      // );
-
-      // Update the card with the ticket information that was just submitted
+      // Update the existing adaptive card activity, id'ed by ' handlerContext.context.activity.replyToId'
+      // with the new adaptive card JSON
       const message = MessageFactory.attachment(
         CardFactory.adaptiveCard(cardJson)
       );
@@ -128,6 +127,14 @@ export class TicketAdaptiveCardPositiveActionHandler implements ActionHandler {
 
       return;
     } else {
+      for (const [key, value] of Object.entries<any>(
+        state.ticket.customFields
+      )) {
+        if (key in actionData) {
+          value.value = actionData[key];
+        }
+      }
+
       // Creates the ticket in the RT API
       await this._createTicket(handlerContext, state);
 
@@ -186,13 +193,13 @@ export class TicketAdaptiveCardPositiveActionHandler implements ActionHandler {
     // Add the initial message to the replies and ticket description from the card to the beginning of the replies
     // to be added as comments to the ticket
     replies = [
-      {
-        body: {
-          content: handlerState.ticket.ticketDescriptionInput,
-          contentType: "text/plain",
-        },
-        from: thread.from,
-      } as TeamChannelMessage,
+      // {
+      //   body: {
+      //     content: handlerState.ticket.ticketDescriptionInput.value,
+      //     contentType: "text/plain",
+      //   },
+      //   from: thread.from,
+      // } as TeamChannelMessage,
       thread,
       ...replies,
     ];

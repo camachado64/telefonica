@@ -220,9 +220,8 @@ export class DefaultHandlerManager implements HandlerManager {
     handlerContext.state = this.handlerState(sequenceId);
 
     console.debug(
-      `[${DefaultHandlerManager.name}][DEBUG] ${
-        this.dispatch.name
-      } data:\n${JSON.stringify(data, null, 2)}`
+      `[${DefaultHandlerManager.name}][DEBUG] ${this.dispatch.name} data:`,
+      data
     );
 
     // console.debug(

@@ -254,6 +254,9 @@ export class TicketAdaptiveCardSelectChoiceActionHandler
 
         item.items[1].items[0].value = customFieldValue;
         item.items[1].items[0].isRequired = true;
+        item.items[1].items[0].type = "TextBlock";
+        item.items[1].items[0].text = customFieldValue;
+
         break;
       }
     }
@@ -325,6 +328,7 @@ export class TicketAdaptiveCardSelectChoiceActionHandler
               `[${TicketAdaptiveCardSelectChoiceActionHandler.name}][DEBUG] ${this._resetField.name} Updating field: ${item.items[0].id}`
             );
 
+            item.items[1].items[0].type = "Input.ChoiceSet";
             item.items[1].items[0].choices = choices;
             item.items[1].items[0].value = "";
             item.items[1].items[0].isRequired = false;
