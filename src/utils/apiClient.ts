@@ -263,13 +263,13 @@ export class APIClient {
   }
 
   public async queues(): Promise<Queues> {
-    if (!this._cookie) {
+    // if (!this._cookie) {
       // If the cookie is not set, login to the API and set the cookie
       this._cookie = await this.login();
-    }
+    // }
 
     console.debug(
-      `[${APIClient.name}][DEBUG] ${this.queues.name} endpoint: ${this._config.apiEndpoint}/REST/2.0/queues/all}`
+      `[${APIClient.name}][DEBUG] ${this.queues.name} endpoint: ${this._config.apiEndpoint}/REST/2.0/queues/all`
     );
 
     // Fetch the queues
@@ -320,10 +320,10 @@ export class APIClient {
       };
     }
   ): Promise<Ticket> {
-    if (!this._cookie) {
+    // if (!this._cookie) {
       // If the cookie is not set, login to the API and set the cookie
       this._cookie = await this.login();
-    }
+    // }
 
     console.debug(
       `[${APIClient.name}][DEBUG] ${
@@ -399,9 +399,9 @@ export class APIClient {
   }
 
   public async ticket(ticket: TypedHyperlinkEntity): Promise<Ticket> {
-    if (!this._cookie) {
+    // if (!this._cookie) {
       this._cookie = await this.login();
-    }
+    // }
 
     console.debug(
       `[${APIClient.name}][DEBUG] ${this.ticket.name} endpoint: ${ticket._url}`
@@ -417,9 +417,9 @@ export class APIClient {
   }
 
   public async updateTicket(ticket: Ticket): Promise<any> {
-    if (!this._cookie) {
+    // if (!this._cookie) {
       this._cookie = await this.login();
-    }
+    // }
 
     const endpoint = ticket._hyperlinks.find((v) => v.ref === "self")._url;
 
@@ -446,9 +446,9 @@ export class APIClient {
     ticket: Partial<Ticket>,
     message: TeamChannelMessage
   ): Promise<string[]> {
-    if (!this._cookie) {
+    // if (!this._cookie) {
       this._cookie = await this.login();
-    }
+    // }
 
     console.debug(
       `[${APIClient.name}][DEBUG] ${this.addTicketComment.name} message.id:${message.id}, message.@odata.context: ${message["@odata.context"]}`
@@ -532,9 +532,9 @@ export class APIClient {
   }
 
   public async ticketHistory(ticket: Partial<Ticket>): Promise<TicketHistory> {
-    if (!this._cookie) {
+    // if (!this._cookie) {
       this._cookie = await this.login();
-    }
+    // }
 
     console.debug(
       `[${APIClient.name}][DEBUG] ${this.addTicketComment.name} endpoint: ${
@@ -602,9 +602,9 @@ export class APIClient {
     customFieldId: string,
     value: string
   ): Promise<CustomFieldValue[]> {
-    if (!this._cookie) {
+    // if (!this._cookie) {
       this._cookie = await this.login();
-    }
+    // }
 
     if (!customFieldId) {
       // If the custom field ID is not provided, throw an error
@@ -697,9 +697,9 @@ export class APIClient {
   }
 
   public async user(email: string): Promise<User> {
-    if (!this._cookie) {
+    // if (!this._cookie) {
       this._cookie = await this.login();
-    }
+    // }
 
     console.debug(
       `[${APIClient.name}][DEBUG] ${this.user.name} email: ${email}`

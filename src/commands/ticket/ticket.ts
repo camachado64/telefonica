@@ -134,8 +134,8 @@ export class TicketCommandHandler extends CommandHandler {
       buttons: {
         visible: true,
         create: {
-          title: "Seguiente",
-          tooltip: "Seguir con la creación de la incidencia",
+          title: "Siguiente",
+          tooltip: "Siguir con la creación de lo ticket",
           enabled: true,
         },
         cancel: {
