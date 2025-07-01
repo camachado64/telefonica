@@ -218,6 +218,30 @@
                             "type": "TextBlock",
                             "size": "Medium",
                             "weight": "Bolder",
+                            "text": "Tiempo trabajado",
+                            "id": "ticketTimeTakenLabel"
+                        },
+                        {
+                            "type": "Container",
+                            "items": [
+                                {
+                                    "type": "Input.Text",
+                                    "id": "ticketTimeTakenInput",
+                                    "placeholder": "Tiempo trabajado en minutos",
+                                    "isRequired": true,
+                                    "value": "${ticket.ticketTimeTakenInput.value}"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "Container",
+                    "items": [
+                        {
+                            "type": "TextBlock",
+                            "size": "Medium",
+                            "weight": "Bolder",
                             "text": "Descricion de la incidencia",
                             "id": "ticketDescriptionLabel"
                         },

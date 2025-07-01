@@ -239,6 +239,7 @@ export class TicketAdaptiveCardPositiveActionHandler implements ActionHandler {
       queue,
       thread.subject,
       handlerState.ticket.ticketStateChoiceSet.value,
+      handlerState.ticket.ticketTimeTakenInput.value,
       handlerState.ticket.ticketDescriptionInput.value,
       messageCtx.threadFrom.email,
       messageCtx.replyFrom.email,
@@ -407,7 +408,7 @@ export class TicketAdaptiveCardPositiveActionHandler implements ActionHandler {
       customFieldMap[customField.id] = {
         id: customField.id,
         text: customField.Name,
-        placeholder: customField.Description,
+        placeholder: customField.EntryHint, //Description,
         value: "",
         visible: customField.id in freeCustomFields,
         basedOn: customField.BasedOn?.id ?? null,

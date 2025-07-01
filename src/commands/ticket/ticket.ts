@@ -100,6 +100,9 @@ export class TicketCommandHandler extends CommandHandler {
         choices: queueChoices,
         // required: false
       },
+      ticketTimeTakenInput: {
+        value: "0",
+      },
       ticketDescriptionInput: {
         value: "",
       },

@@ -114,6 +114,7 @@ export interface CustomField {
   Disabled: "0" | "1";
   MaxValues: number;
   Pattern: string;
+  EntryHint?: string;
   BasedOn?: TypedHyperlinkEntity;
   Dependents?: CustomField[];
   _hyperlinks: RefHyperlinkEntity[];
@@ -264,8 +265,8 @@ export class APIClient {
 
   public async queues(): Promise<Queues> {
     // if (!this._cookie) {
-      // If the cookie is not set, login to the API and set the cookie
-      this._cookie = await this.login();
+    // If the cookie is not set, login to the API and set the cookie
+    this._cookie = await this.login();
     // }
 
     console.debug(
@@ -310,6 +311,7 @@ export class APIClient {
     queue: Queue,
     subject: string,
     status: string,
+    timeWorked: string,
     description: string,
     requestorEmail: string,
     ownerEmail: string,
@@ -321,8 +323,8 @@ export class APIClient {
     }
   ): Promise<Ticket> {
     // if (!this._cookie) {
-      // If the cookie is not set, login to the API and set the cookie
-      this._cookie = await this.login();
+    // If the cookie is not set, login to the API and set the cookie
+    this._cookie = await this.login();
     // }
 
     console.debug(
@@ -331,7 +333,9 @@ export class APIClient {
       } queue:\n${JSON.stringify(queue, null, 2)}`
     );
 
-    const endpoint: string = queue._hyperlinks.find((v: RefHyperlinkEntity) => v.ref === "create")._url;
+    const endpoint: string = queue._hyperlinks.find(
+      (v: RefHyperlinkEntity) => v.ref === "create"
+    )._url;
 
     console.debug(
       `[${APIClient.name}][DEBUG] ${this.createTicket.name} endpoint: ${endpoint}`
@@ -348,59 +352,77 @@ export class APIClient {
     const ownerUser: User = await this.user(ownerEmail);
 
     console.debug(
-      `[${APIClient.name}][DEBUG] ${
-        this.createTicket.name
-      } body:\n${JSON.stringify(
-        JSON.stringify(
-          {
-            Subject: subject,
-            Status: status,
-            Content: description,
-            CustomFields: customFieldsBody,
-            Requestor: requestorEmail,
-            Owner: ownerUser?.Name,
-          },
-          null,
-          2
-        )
-      )}`
+      `[${APIClient.name}][DEBUG] ${this.createTicket.name} body:`,
+      {
+        Subject: subject,
+        Status: status,
+        Content: description,
+        CustomFields: customFieldsBody,
+        Requestor: requestorEmail,
+        Owner: ownerUser?.Name,
+        TimeWorked: timeWorked,
+      }
     );
 
     // Create the ticket using the supplied queue and subject
-    const createTicket: CreateTicket = await fetch(
-      endpoint,
-      {
-        method: HttpMethods.Post,
-        headers: {
-          Cookie: this._cookie,
-          [HttpHeaders.ContentType]: HttpContentTypes.Json,
-        },
-        body: JSON.stringify({
-          Subject: subject,
-          Status: status,
-          Content: description,
-          CustomFields: customFieldsBody,
-          // Creator: creator,
-          Requestor: requestorEmail,
-          Owner: ownerUser?.Name,
-        }),
-      }
-    ).then((response: Response): Promise<CreateTicket> => {
+    const createTicket: CreateTicket = await fetch(endpoint, {
+      method: HttpMethods.Post,
+      headers: {
+        Cookie: this._cookie,
+        [HttpHeaders.ContentType]: HttpContentTypes.Json,
+      },
+      body: JSON.stringify({
+        Subject: subject,
+        Status: status,
+        Content: description,
+        CustomFields: customFieldsBody,
+        // Creator: creator,
+        Requestor: requestorEmail,
+        Owner: ownerUser?.Name,
+      }),
+    }).then((response: Response): Promise<CreateTicket> => {
       return response?.json();
     });
 
     console.debug(
-      `[${APIClient.name}][DEBUG] ${
-        this.createTicket.name
-      } createTicket:\n${JSON.stringify(createTicket, null, 2)}`
+      `[${APIClient.name}][DEBUG] ${this.createTicket.name} createTicket:`,
+      createTicket
     );
 
-    return await this.ticket(createTicket);
+    const ticket = await this.ticket(createTicket);
+
+    if (
+      timeWorked &&
+      ((typeof timeWorked === "string" && !isNaN(parseInt(timeWorked, 10))) ||
+        typeof timeWorked == "number")
+    ) {
+      console.debug(
+        `[${APIClient.name}][DEBUG] ${this.createTicket.name} timeWorked:`,
+        timeWorked
+      );
+
+      // If timeWorked is provided, update the ticket with the time worked
+      const updateTicket = await this.updateTicket(
+        ticket._hyperlinks.find((v) => v.ref === "self")._url,
+        {
+          TimeWorked: timeWorked,
+        }
+      ).catch((error: any) => {
+        logError(error, APIClient.name, this.updateTicket.name);
+      });
+
+      console.debug(
+        `[${APIClient.name}][DEBUG] ${this.updateTicket.name} updateTicket:`,
+        updateTicket
+      );
+    }
+
+    return ticket;
   }
 
   public async ticket(ticket: TypedHyperlinkEntity): Promise<Ticket> {
     // if (!this._cookie) {
-      this._cookie = await this.login();
+    this._cookie = await this.login();
     // }
 
     console.debug(
@@ -416,26 +438,27 @@ export class APIClient {
     return await this.get<Ticket>(ticket._url);
   }
 
-  public async updateTicket(ticket: Ticket): Promise<any> {
+  public async updateTicket(endpoint: string, body: any): Promise<any> {
     // if (!this._cookie) {
-      this._cookie = await this.login();
+    this._cookie = await this.login();
     // }
-
-    const endpoint = ticket._hyperlinks.find((v) => v.ref === "self")._url;
 
     console.debug(
       `[${APIClient.name}][DEBUG] ${this.updateTicket.name} endpoint: ${endpoint}`
     );
 
-    return fetch(endpoint, {
+    console.debug(
+      `[${APIClient.name}][DEBUG] ${this.updateTicket.name} body:`,
+      body
+    );
+
+    return await fetch(endpoint, {
       method: HttpMethods.Put,
       headers: {
         Cookie: this._cookie,
         [HttpHeaders.ContentType]: HttpContentTypes.Json,
       },
-      body: JSON.stringify({
-        Status: ticket.Status,
-      }),
+      body: JSON.stringify(body),
     }).then((response: Response): Promise<any> => {
       return response?.json();
     });
@@ -447,7 +470,7 @@ export class APIClient {
     message: TeamChannelMessage
   ): Promise<string[]> {
     // if (!this._cookie) {
-      this._cookie = await this.login();
+    this._cookie = await this.login();
     // }
 
     console.debug(
@@ -514,7 +537,7 @@ export class APIClient {
           Subject: `Respuesta de ${message.from.user.displayName}`,
           Content: message.body.content,
           ContentType: HttpContentTypes.Html,
-          TimeTaken: "1",
+          TimeTaken: "0",
           Attachments: attachments,
         }),
       }
@@ -533,7 +556,7 @@ export class APIClient {
 
   public async ticketHistory(ticket: Partial<Ticket>): Promise<TicketHistory> {
     // if (!this._cookie) {
-      this._cookie = await this.login();
+    this._cookie = await this.login();
     // }
 
     console.debug(
@@ -603,7 +626,7 @@ export class APIClient {
     value: string
   ): Promise<CustomFieldValue[]> {
     // if (!this._cookie) {
-      this._cookie = await this.login();
+    this._cookie = await this.login();
     // }
 
     if (!customFieldId) {
@@ -698,7 +721,7 @@ export class APIClient {
 
   public async user(email: string): Promise<User> {
     // if (!this._cookie) {
-      this._cookie = await this.login();
+    this._cookie = await this.login();
     // }
 
     console.debug(

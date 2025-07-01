@@ -170,4 +170,4 @@ const safeConfig: Partial<BotConfiguration> = {};
 //   // }
 // });
 recursiveMask(config, safeConfig);
-console.debug(`config:${safeConfig ? "\n" : `${safeConfig}`}`, safeConfig);
+console.debug(`config:`, safeConfig);
